@@ -42,21 +42,21 @@ async function api(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
   if (token()) headers.Authorization = `Bearer ${token()}`;
   const res = await fetch(`${API}${path}`, { ...opts, headers });
-  if (res.status === 401) {
-    setToken(null);
-    showLogin();
-    throw new Error("Unauthorized");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const detail = err.detail;
-    const message = Array.isArray(detail)
-      ? detail.map((d) => d.msg || d).join(", ")
-      : typeof detail === "string"
-        ? detail
-        : detail?.message || res.statusText;
-    throw new Error(message);
-  }
+    if (res.status === 401) {
+      setToken(null);
+      showLogin();
+      throw new Error("Unauthorized");
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const detail = err.detail;
+      const message = Array.isArray(detail)
+        ? detail.map((d) => d.msg || `${d.loc?.slice(-1)[0] || "field"}: ${d.msg || "invalid"}`).join(", ")
+        : typeof detail === "string"
+          ? detail
+          : detail?.message || res.statusText;
+      throw new Error(message);
+    }
   if (res.status === 204) return null;
   return res.json();
 }
@@ -131,7 +131,7 @@ function renderProjects() {
   const toolbar = el("div", "toolbar");
   toolbar.innerHTML = `<p class="overline">Pipeline</p>`;
   const addBtn = el("button", "btn btn-sm", "New project");
-  addBtn.onclick = () => showNewProjectForm(main);
+  addBtn.onclick = () => showNewProjectForm();
   toolbar.appendChild(addBtn);
   main.appendChild(toolbar);
 
@@ -307,28 +307,91 @@ function renderAgents() {
   main.appendChild(list);
 }
 
-function showNewProjectForm(main) {
-  const form = el("div", "login-card");
-  form.style.margin = "1rem 0";
-  form.innerHTML = `
-    <h3>New project</h3>
-    <label>Ref (e.g. PR-007)</label><input id="np-ref" placeholder="PR-007" />
-    <label>Name</label><input id="np-name" />
-    <label>Hypothesis</label><textarea id="np-hyp"></textarea>
-    <button class="btn" id="np-save">Create</button>
+function closeProjectCreator() {
+  document.getElementById("project-creator-overlay")?.remove();
+}
+
+function showNewProjectForm() {
+  closeProjectCreator();
+  closeProjectEditor();
+  closeTaskEditor();
+  closePromptEditor();
+
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "project-creator-overlay";
+
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">New project</p>
+    <label for="np-ref">Ref</label>
+    <input id="np-ref" type="text" placeholder="PR-007" />
+    <p class="field-hint">Uppercase letters, numbers, and hyphens only (e.g. PR-007).</p>
+    <label for="np-name">Name</label>
+    <input id="np-name" type="text" placeholder="Project name" />
+    <label for="np-hyp">Hypothesis</label>
+    <textarea id="np-hyp" placeholder="What are you testing?"></textarea>
+    <label for="np-form">Form</label>
+    <select id="np-form">
+      <option value="interactive">Interactive (application)</option>
+      <option value="static">Static (writing)</option>
+    </select>
+    <label for="np-stage">Pipeline stage</label>
+    <select id="np-stage"></select>
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="np-save">Create</button>
+      <button type="button" class="btn btn-sm secondary" id="np-cancel">Cancel</button>
+    </div>
+    <p id="np-error" class="error hidden"></p>
   `;
-  main.prepend(form);
-  form.querySelector("#np-save").onclick = async () => {
-    await api("/api/projects", {
-      method: "POST",
-      body: JSON.stringify({
-        ref: form.querySelector("#np-ref").value.trim().toUpperCase(),
-        name: form.querySelector("#np-name").value.trim(),
-        hypothesis: form.querySelector("#np-hyp").value.trim(),
-      }),
-    });
-    loadProjects();
+
+  const stageSel = panel.querySelector("#np-stage");
+  for (const s of PROJECT_STAGES) {
+    const o = document.createElement("option");
+    o.value = s.id;
+    o.textContent = s.label;
+    if (s.id === "idea") o.selected = true;
+    stageSel.appendChild(o);
+  }
+
+  panel.querySelector("#np-cancel").onclick = closeProjectCreator;
+  panel.querySelector("#np-save").onclick = async () => {
+    const errEl = panel.querySelector("#np-error");
+    errEl.classList.add("hidden");
+    const ref = panel.querySelector("#np-ref").value.trim().toUpperCase();
+    const name = panel.querySelector("#np-name").value.trim();
+    const hypothesis = panel.querySelector("#np-hyp").value.trim();
+    if (!ref || !name) {
+      errEl.textContent = "Ref and name are required.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    if (!/^[A-Z0-9-]+$/.test(ref)) {
+      errEl.textContent = "Ref must use only letters, numbers, and hyphens (e.g. PR-007).";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    try {
+      await api("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          ref,
+          name,
+          hypothesis,
+          form: panel.querySelector("#np-form").value,
+          stage: stageSel.value,
+        }),
+      });
+      closeProjectCreator();
+      loadProjects();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
   };
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#np-ref").focus();
 }
 
 function reloadPromptViews() {
