@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Foundry · Perrin Research</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/PerrinResearch.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/foundry.css" />
+</head>
+<body>
+  <div id="login-view">
+    <div class="login-card">
+      <p class="overline">Internal · Foundry</p>
+      <h1>Perrin<span class="brand-sep">//</span>Research</h1>
+      <p>Project pipeline, kanban tasks, and agent prompt queue.</p>
+      <form id="login-form">
+        <label for="email">Email</label>
+        <input id="email" type="email" value="scott@perrinresearch.com" required />
+        <label for="password">Password</label>
+        <input id="password" type="password" value="foundry-demo" required />
+        <button type="submit" class="btn">Sign in</button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-view" class="hidden">
+    <header class="header">
+      <div class="header-inner">
+        <a href="#" class="brand" id="home-link">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">Perrin<span class="brand-sep">//</span>Research</span>
+          <span class="brand-tag mono">Foundry</span>
+        </a>
+        <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="foundry-nav" aria-label="Toggle navigation">
+          <span class="nav-toggle-bar"></span>
+          <span class="nav-toggle-bar"></span>
+          <span class="nav-toggle-bar"></span>
+        </button>
+        <div id="foundry-nav" class="header-nav">
+          <nav class="nav-tabs" aria-label="Main navigation">
+            <button type="button" data-view="projects" class="active">Projects</button>
+            <button type="button" data-view="agents">Agent queue</button>
+          </nav>
+          <button type="button" class="btn btn-sm secondary" id="logout-btn">Sign out</button>
+        </div>
+      </div>
+    </header>
+    <main class="main" id="main"></main>
+    <footer class="site-footer">
+      <p class="footer-name">Perrin Research LLC</p>
+      <p class="footer-tagline mono">idea → prototype → evidence → product</p>
+    </footer>
+  </div>
+
+  <script src="/assets/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sqlalchemy>=2.0.36
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+pyjwt>=2.9.0
+python-multipart>=0.0.12
+email-validator>=2.2.0
+a2wsgi>=1.10.0
