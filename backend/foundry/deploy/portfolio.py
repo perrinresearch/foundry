@@ -49,6 +49,14 @@ def _replace_quoted_field(block: str, field: str, value: str) -> str:
     return re.sub(pattern, rf"\1{escaped}\3", block, count=1)
 
 
+def _replace_hypothesis_field(block: str, value: str) -> str:
+    escaped = _escape_ts_string(value)
+    multiline = r'(hypothesis:\s*\n\s*")([^"]*)(")'
+    if re.search(multiline, block):
+        return re.sub(multiline, rf"\1{escaped}\3", block, count=1)
+    return _replace_quoted_field(block, "hypothesis", value)
+
+
 def sync_portfolio_from_db(db: Session, portfolio_path: Path | None = None) -> PortfolioSyncResult:
     path = portfolio_path or settings.site_portfolio_file
     if not path.is_file():
@@ -79,7 +87,7 @@ def sync_portfolio_from_db(db: Session, portfolio_path: Path | None = None) -> P
         new_block = block
         new_block = _replace_quoted_field(new_block, "stage", project.stage)
         new_block = _replace_quoted_field(new_block, "name", project.name)
-        new_block = _replace_quoted_field(new_block, "hypothesis", project.hypothesis)
+        new_block = _replace_hypothesis_field(new_block, project.hypothesis)
         new_block = _replace_quoted_field(new_block, "form", project.form)
         if new_block != block:
             replacements.append((start, end, new_block))

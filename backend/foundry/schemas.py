@@ -36,7 +36,7 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
     hypothesis: str | None = None
     form: str | None = None
     stage: str | None = None

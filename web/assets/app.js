@@ -411,9 +411,13 @@ function showProjectEditor(project) {
   panel.innerHTML = `
     <p class="overline">Edit project</p>
     <p class="prompt-task-context mono">${escapeHtml(project.ref)}</p>
+    <label for="pj-name">Name</label>
+    <input id="pj-name" type="text" />
+    <label for="pj-hyp">Hypothesis</label>
+    <textarea id="pj-hyp" placeholder="What are you testing?"></textarea>
     <label for="pj-stage">Pipeline stage</label>
     <select id="pj-stage"></select>
-    <p class="field-hint">Synced to the public site when you Push to site.</p>
+    <p class="field-hint">Name, hypothesis, and stage sync to the public site when you Push to site (PR-000).</p>
     <label for="pj-status">Project status</label>
     <select id="pj-status"></select>
     <p class="field-hint">Internal only — archived projects stay out of site sync.</p>
@@ -423,6 +427,9 @@ function showProjectEditor(project) {
     </div>
     <p id="pj-error" class="error hidden"></p>
   `;
+
+  panel.querySelector("#pj-name").value = project.name || "";
+  panel.querySelector("#pj-hyp").value = project.hypothesis || "";
 
   const stageSel = panel.querySelector("#pj-stage");
   for (const s of PROJECT_STAGES) {
@@ -445,10 +452,18 @@ function showProjectEditor(project) {
   panel.querySelector("#pj-save").onclick = async () => {
     const errEl = panel.querySelector("#pj-error");
     errEl.classList.add("hidden");
+    const name = panel.querySelector("#pj-name").value.trim();
+    if (!name) {
+      errEl.textContent = "Name is required.";
+      errEl.classList.remove("hidden");
+      return;
+    }
     try {
       await api(`/api/projects/${project.id}`, {
         method: "PATCH",
         body: JSON.stringify({
+          name,
+          hypothesis: panel.querySelector("#pj-hyp").value.trim(),
           stage: stageSel.value,
           status: statusSel.value,
         }),
@@ -463,7 +478,7 @@ function showProjectEditor(project) {
 
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
-  stageSel.focus();
+  panel.querySelector("#pj-name").focus();
 }
 
 function closeProjectEditor() {
