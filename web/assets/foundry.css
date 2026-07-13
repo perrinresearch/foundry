@@ -208,6 +208,40 @@ textarea { min-height: 5rem; resize: vertical; }
 .project-card .stage { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; }
 .project-card .repo-slug { font-size: 0.7rem; color: var(--color-text-muted); margin-top: 0.35rem; }
 
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.users-table th,
+.users-table td {
+  text-align: left;
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.users-table th {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-subtle);
+}
+.users-table .user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.users-table tr.user-revoked td { opacity: 0.55; }
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+}
+.checkbox-row input { width: auto; margin: 0; }
+
 .kanban {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

@@ -12,7 +12,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session, joinedload
 
-from foundry.auth import create_token, get_current_user, hash_password, verify_password
+from foundry.auth import (
+    create_token,
+    get_current_user,
+    hash_password,
+    require_admin,
+    verify_password,
+)
 from foundry.config import settings
 from foundry.database import Base, SessionLocal, engine, get_db
 from foundry.migrate import (
@@ -20,6 +26,7 @@ from foundry.migrate import (
     migrate_project_repo_slug,
     migrate_project_visibility,
     migrate_task_statuses,
+    migrate_user_admin_flags,
 )
 from foundry.deploy.site import (
     SiteDeployError,
@@ -38,10 +45,13 @@ from foundry.models import (
     User,
 )
 from foundry.schemas import (
+    AdminUserCreate,
+    AdminUserUpdate,
     AgentPromptCreate,
     AgentPromptOut,
     AgentPromptReorder,
     AgentPromptUpdate,
+    PasswordChange,
     ProjectCreate,
     ProjectOut,
     ProjectUpdate,
@@ -50,7 +60,6 @@ from foundry.schemas import (
     TaskOut,
     TaskUpdate,
     TokenResponse,
-    UserCreate,
     UserLogin,
     UserOut,
 )
@@ -77,6 +86,7 @@ def on_startup():
     migrate_task_statuses(engine)
     migrate_project_visibility(engine)
     migrate_project_repo_slug(engine)
+    migrate_user_admin_flags(engine)
     db = SessionLocal()
     try:
         seed_database(db)
@@ -126,18 +136,10 @@ def prompt_out(prompt: AgentPrompt, db: Session) -> AgentPromptOut:
 
 # --- Auth ---
 
-@app.post("/api/auth/register", response_model=TokenResponse)
-def register(body: UserCreate, db: Annotated[Session, Depends(get_db)]):
-    if db.query(User).filter(User.email == body.email).first():
-        raise HTTPException(400, "Email already registered")
-    user = User(
-        email=body.email,
-        name=body.name,
-        password_hash=hash_password(body.password),
-    )
-    db.add(user)
-    db.commit()
-    return TokenResponse(access_token=create_token(user.id))
+@app.post("/api/auth/register", status_code=403)
+def register():
+    """Public registration is closed — admins create accounts via POST /api/users."""
+    raise HTTPException(403, "Public registration is closed. Ask an admin to create your account.")
 
 
 @app.post("/api/auth/login", response_model=TokenResponse)
@@ -145,11 +147,93 @@ def login(body: UserLogin, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.email == body.email).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Invalid credentials")
+    if not getattr(user, "is_active", True):
+        raise HTTPException(401, "Account access has been revoked")
     return TokenResponse(access_token=create_token(user.id))
 
 
 @app.get("/api/auth/me", response_model=UserOut)
 def me(user: Annotated[User, Depends(get_current_user)]):
+    return user
+
+
+@app.post("/api/auth/change-password", response_model=UserOut)
+def change_password(
+    body: PasswordChange,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(400, "Current password is incorrect")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _active_admin_count(db: Session) -> int:
+    return (
+        db.query(User)
+        .filter(User.is_admin == True, User.is_active == True)  # noqa: E712
+        .count()
+    )
+
+
+@app.get("/api/users", response_model=list[UserOut])
+def list_users(
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return db.query(User).order_by(User.email).all()
+
+
+@app.post("/api/users", response_model=UserOut, status_code=201)
+def create_user(
+    body: AdminUserCreate,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    if db.query(User).filter(User.email == body.email).first():
+        raise HTTPException(400, "Email already registered")
+    user = User(
+        email=body.email,
+        name=body.name,
+        password_hash=hash_password(body.password),
+        is_admin=body.is_admin,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.patch("/api/users/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: int,
+    body: AdminUserUpdate,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    data = body.model_dump(exclude_unset=True)
+    password = data.pop("password", None)
+
+    new_is_admin = data.get("is_admin", user.is_admin)
+    new_is_active = data.get("is_active", user.is_active)
+    was_active_admin = user.is_admin and user.is_active
+    will_be_active_admin = new_is_admin and new_is_active
+    if was_active_admin and not will_be_active_admin and _active_admin_count(db) <= 1:
+        raise HTTPException(400, "Cannot demote or revoke the last active admin")
+
+    for key, val in data.items():
+        setattr(user, key, val)
+    if password is not None:
+        user.password_hash = hash_password(password)
+    db.commit()
+    db.refresh(user)
     return user
 
 

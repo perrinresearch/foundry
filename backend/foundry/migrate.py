@@ -112,3 +112,20 @@ def migrate_project_repo_slug(engine: Engine) -> None:
                 "ALTER TABLE projects ADD COLUMN repo_slug VARCHAR(47) NOT NULL DEFAULT ''"
             )
         )
+
+
+def migrate_user_admin_flags(engine: Engine) -> None:
+    """Add users.is_admin and users.is_active for access control."""
+    insp = inspect(engine)
+    if "users" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("users")}
+    with engine.begin() as conn:
+        if "is_admin" not in cols:
+            conn.execute(
+                text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0")
+            )
+        if "is_active" not in cols:
+            conn.execute(
+                text("ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1")
+            )

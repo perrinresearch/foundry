@@ -67,4 +67,12 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
+    if not getattr(user, "is_active", True):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account access has been revoked")
+    return user
+
+
+def require_admin(user: Annotated[User, Depends(get_current_user)]) -> User:
+    if not getattr(user, "is_admin", False):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required")
     return user

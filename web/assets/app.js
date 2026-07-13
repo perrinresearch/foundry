@@ -34,7 +34,15 @@ const PROJECT_VISIBILITIES = [
 
 const REPO_SLUG_RE = /^[a-z][a-z0-9-]{1,46}$/;
 
-let state = { view: "projects", projects: [], selectedProject: null, tasks: [], prompts: [] };
+let state = {
+  view: "projects",
+  projects: [],
+  selectedProject: null,
+  tasks: [],
+  prompts: [],
+  users: [],
+  me: null,
+};
 
 function token() {
   return localStorage.getItem(TOKEN_KEY);
@@ -71,11 +79,42 @@ async function api(path, opts = {}) {
 function showLogin() {
   document.getElementById("login-view").classList.remove("hidden");
   document.getElementById("app-view").classList.add("hidden");
+  state.me = null;
+  updateAdminNav();
 }
 
 function showApp() {
   document.getElementById("login-view").classList.add("hidden");
   document.getElementById("app-view").classList.remove("hidden");
+}
+
+function updateAdminNav() {
+  const usersNav = document.getElementById("nav-users");
+  if (!usersNav) return;
+  if (state.me?.is_admin) usersNav.classList.remove("hidden");
+  else {
+    usersNav.classList.add("hidden");
+    if (state.view === "users") {
+      state.view = "projects";
+      document.querySelectorAll(".nav-tabs button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.view === "projects");
+      });
+    }
+  }
+}
+
+async function loadMe() {
+  state.me = await api("/api/auth/me");
+  updateAdminNav();
+  return state.me;
+}
+
+async function afterLogin() {
+  showApp();
+  await loadMe();
+  if (state.view === "users" && state.me?.is_admin) loadUsers();
+  else if (state.view === "agents") loadPrompts();
+  else loadProjects();
 }
 
 function el(tag, cls, html) {
@@ -779,14 +818,263 @@ async function publishPublicSite(btn) {
   }
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
 function render() {
   if (state.view === "agents") renderAgents();
+  else if (state.view === "users") renderUsers();
   else if (state.selectedProject) renderProjectDetail();
   else renderProjects();
+}
+
+async function loadUsers() {
+  state.users = await api("/api/users");
+  state.selectedProject = null;
+  state.view = "users";
+  render();
+}
+
+function renderUsers() {
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  const toolbar = el("div", "toolbar");
+  toolbar.innerHTML = `<p class="overline">Users</p>`;
+  const addBtn = el("button", "btn btn-sm", "New user");
+  addBtn.onclick = () => showUserCreator();
+  toolbar.appendChild(addBtn);
+  main.appendChild(toolbar);
+
+  const table = el("table", "users-table");
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement("tbody");
+  for (const u of state.users) {
+    const tr = document.createElement("tr");
+    if (!u.is_active) tr.classList.add("user-revoked");
+    tr.innerHTML = `
+      <td class="mono">${escapeHtml(u.email)}</td>
+      <td>${escapeHtml(u.name)}</td>
+      <td>${u.is_admin ? "Admin" : "User"}</td>
+      <td>${u.is_active ? "Active" : "Revoked"}</td>
+      <td class="user-actions"></td>
+    `;
+    const actions = tr.querySelector(".user-actions");
+
+    const setPw = el("button", "btn btn-sm secondary", "Set password");
+    setPw.type = "button";
+    setPw.onclick = () => showSetPasswordForm(u);
+    actions.appendChild(setPw);
+
+    const toggleAdmin = el(
+      "button",
+      "btn btn-sm secondary",
+      u.is_admin ? "Demote" : "Make admin"
+    );
+    toggleAdmin.type = "button";
+    toggleAdmin.onclick = async () => {
+      try {
+        await api(`/api/users/${u.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_admin: !u.is_admin }),
+        });
+        await loadUsers();
+        await loadMe();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+    actions.appendChild(toggleAdmin);
+
+    const toggleActive = el(
+      "button",
+      "btn btn-sm secondary",
+      u.is_active ? "Revoke" : "Restore"
+    );
+    toggleActive.type = "button";
+    toggleActive.onclick = async () => {
+      const action = u.is_active ? "revoke access for" : "restore access for";
+      if (!confirm(`${action} ${u.email}?`)) return;
+      try {
+        await api(`/api/users/${u.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_active: !u.is_active }),
+        });
+        await loadUsers();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+    actions.appendChild(toggleActive);
+
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  main.appendChild(table);
+}
+
+function showUserCreator() {
+  closeUserModals();
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "user-creator-overlay";
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">New user</p>
+    <label for="nu-email">Email</label>
+    <input id="nu-email" type="email" required />
+    <label for="nu-name">Name</label>
+    <input id="nu-name" type="text" required />
+    <label for="nu-password">Temporary password</label>
+    <input id="nu-password" type="password" minlength="8" required />
+    <label class="checkbox-row"><input id="nu-admin" type="checkbox" /> Admin</label>
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="nu-save">Create</button>
+      <button type="button" class="btn btn-sm secondary" id="nu-cancel">Cancel</button>
+    </div>
+    <p id="nu-error" class="error hidden"></p>
+  `;
+  panel.querySelector("#nu-cancel").onclick = closeUserModals;
+  panel.querySelector("#nu-save").onclick = async () => {
+    const errEl = panel.querySelector("#nu-error");
+    errEl.classList.add("hidden");
+    const email = panel.querySelector("#nu-email").value.trim();
+    const name = panel.querySelector("#nu-name").value.trim();
+    const password = panel.querySelector("#nu-password").value;
+    if (!email || !name || password.length < 8) {
+      errEl.textContent = "Email, name, and password (8+ characters) are required.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    try {
+      await api("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          email,
+          name,
+          password,
+          is_admin: panel.querySelector("#nu-admin").checked,
+        }),
+      });
+      closeUserModals();
+      loadUsers();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
+  };
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#nu-email").focus();
+}
+
+function showSetPasswordForm(user) {
+  closeUserModals();
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "user-password-overlay";
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">Set password</p>
+    <p class="prompt-task-context mono">${escapeHtml(user.email)}</p>
+    <label for="sp-password">Temporary password</label>
+    <input id="sp-password" type="password" minlength="8" required />
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="sp-save">Save</button>
+      <button type="button" class="btn btn-sm secondary" id="sp-cancel">Cancel</button>
+    </div>
+    <p id="sp-error" class="error hidden"></p>
+  `;
+  panel.querySelector("#sp-cancel").onclick = closeUserModals;
+  panel.querySelector("#sp-save").onclick = async () => {
+    const errEl = panel.querySelector("#sp-error");
+    errEl.classList.add("hidden");
+    const password = panel.querySelector("#sp-password").value;
+    if (password.length < 8) {
+      errEl.textContent = "Password must be at least 8 characters.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    try {
+      await api(`/api/users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ password }),
+      });
+      closeUserModals();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
+  };
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#sp-password").focus();
+}
+
+function showChangePasswordForm() {
+  closeUserModals();
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "change-password-overlay";
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">Change password</p>
+    <label for="cp-current">Current password</label>
+    <input id="cp-current" type="password" required />
+    <label for="cp-new">New password</label>
+    <input id="cp-new" type="password" minlength="8" required />
+    <label for="cp-confirm">Confirm new password</label>
+    <input id="cp-confirm" type="password" minlength="8" required />
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="cp-save">Save</button>
+      <button type="button" class="btn btn-sm secondary" id="cp-cancel">Cancel</button>
+    </div>
+    <p id="cp-error" class="error hidden"></p>
+  `;
+  panel.querySelector("#cp-cancel").onclick = closeUserModals;
+  panel.querySelector("#cp-save").onclick = async () => {
+    const errEl = panel.querySelector("#cp-error");
+    errEl.classList.add("hidden");
+    const current_password = panel.querySelector("#cp-current").value;
+    const new_password = panel.querySelector("#cp-new").value;
+    const confirm = panel.querySelector("#cp-confirm").value;
+    if (new_password.length < 8) {
+      errEl.textContent = "New password must be at least 8 characters.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    if (new_password !== confirm) {
+      errEl.textContent = "New password and confirmation do not match.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    try {
+      await api("/api/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ current_password, new_password }),
+      });
+      closeUserModals();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
+  };
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#cp-current").focus();
+}
+
+function closeUserModals() {
+  document.getElementById("user-creator-overlay")?.remove();
+  document.getElementById("user-password-overlay")?.remove();
+  document.getElementById("change-password-overlay")?.remove();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 document.getElementById("login-form").onsubmit = async (e) => {
@@ -802,8 +1090,7 @@ document.getElementById("login-form").onsubmit = async (e) => {
       }),
     });
     setToken(data.access_token);
-    showApp();
-    loadProjects();
+    await afterLogin();
   } catch (err) {
     errEl.textContent = err.message;
     errEl.classList.remove("hidden");
@@ -830,8 +1117,14 @@ document.addEventListener("keydown", (e) => {
 
 document.getElementById("logout-btn").onclick = () => {
   closeMobileNav();
+  closeUserModals();
   setToken(null);
   showLogin();
+};
+
+document.getElementById("change-password-btn").onclick = () => {
+  closeMobileNav();
+  showChangePasswordForm();
 };
 
 document.getElementById("home-link").onclick = (e) => {
@@ -839,6 +1132,9 @@ document.getElementById("home-link").onclick = (e) => {
   closeMobileNav();
   state.view = "projects";
   state.selectedProject = null;
+  document.querySelectorAll(".nav-tabs button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.view === "projects");
+  });
   loadProjects();
 };
 
@@ -850,13 +1146,16 @@ document.querySelectorAll(".nav-tabs button").forEach((btn) => {
     state.view = btn.dataset.view;
     state.selectedProject = null;
     if (state.view === "agents") loadPrompts();
+    else if (state.view === "users") loadUsers();
     else loadProjects();
   };
 });
 
 if (token()) {
-  showApp();
-  loadProjects();
+  afterLogin().catch(() => {
+    setToken(null);
+    showLogin();
+  });
 } else {
   showLogin();
 }

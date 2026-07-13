@@ -41,16 +41,22 @@ venv/bin/pip install -r backend/requirements.txt
 ./scripts/run.sh
 ```
 
-**Demo login:** `scott@perrinresearch.com` / `foundry-demo`
+**Demo login:** `scott@perrinresearch.com` / `foundry-demo` (bootstrapped as admin)
 
 ## API
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /api/auth/login` | JWT login |
+| `POST /api/auth/login` | JWT login (rejects revoked accounts) |
+| `POST /api/auth/register` | Closed — returns 403; admins create users |
+| `GET /api/auth/me` | Current user (`is_admin`, `is_active`) |
+| `POST /api/auth/change-password` | Change own password (`current_password`, `new_password`) |
+| `GET /api/users` | List users (admin) |
+| `POST /api/users` | Create user (admin) |
+| `PATCH /api/users/{id}` | Update admin/active flags or set temp password (admin) |
 | `GET /api/projects` | List projects |
 | `POST /api/projects` | Create project |
-| `PATCH /api/projects/{id}` | Update project (stage, status, etc.) |
+| `PATCH /api/projects/{id}` | Update project (stage, status, visibility, repo_slug, etc.) |
 | `POST /api/site/deploy` | Sync active portfolio projects and publish public site |
 | `POST /api/projects/{id}/deploy-site` | Legacy deploy endpoint (PR-000 only; prefer `/api/site/deploy`) |
 | `GET /api/projects/{id}/tasks` | Kanban tasks |
@@ -62,6 +68,13 @@ venv/bin/pip install -r backend/requirements.txt
 | `POST /api/agent-prompts/reorder` | Reorder queue (`ordered_ids` top to bottom) |
 | `PATCH /api/agent-prompts/{id}` | Update agent prompt |
 | `DELETE /api/agent-prompts/{id}` | Delete agent prompt |
+
+## User management
+
+- Public registration is closed. Admins create accounts from the **Users** tab.
+- Any signed-in user can **Change password** from the header.
+- Admins can set a temporary password, promote/demote admins, and revoke/restore access.
+- The first user (preferring `scott@perrinresearch.com`) is bootstrapped as admin on startup if no admin exists.
 
 ## Android
 

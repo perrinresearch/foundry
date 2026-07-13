@@ -23,8 +23,30 @@ class UserOut(BaseModel):
     id: int
     email: str
     name: str
+    is_admin: bool = False
+    is_active: bool = True
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
+
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=8)
+    is_admin: bool = False
+
+
+class AdminUserUpdate(BaseModel):
+    is_admin: bool | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class ProjectCreate(BaseModel):

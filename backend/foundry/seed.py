@@ -167,15 +167,33 @@ def ensure_seed_projects(db: Session) -> None:
     db.commit()
 
 
+def ensure_bootstrap_admin(db: Session) -> None:
+    """Ensure at least one admin exists (prefer scott@perrinresearch.com)."""
+    if db.query(User).filter(User.is_admin == True).first():  # noqa: E712
+        return
+    preferred = (
+        db.query(User).filter(User.email == "scott@perrinresearch.com").first()
+    )
+    user = preferred or db.query(User).order_by(User.id).first()
+    if not user:
+        return
+    user.is_admin = True
+    user.is_active = True
+    db.commit()
+
+
 def seed_database(db: Session) -> None:
     if db.query(User).first():
         ensure_seed_projects(db)
+        ensure_bootstrap_admin(db)
         return
 
     user = User(
         email="scott@perrinresearch.com",
         name="Scott Perrin",
         password_hash=hash_password("foundry-demo"),
+        is_admin=True,
+        is_active=True,
     )
     db.add(user)
     db.flush()
@@ -184,3 +202,4 @@ def seed_database(db: Session) -> None:
         _create_project_with_tasks(db, pdata, user.id, 10 - i)
 
     db.commit()
+    ensure_bootstrap_admin(db)
