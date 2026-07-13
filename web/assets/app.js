@@ -27,6 +27,13 @@ const PROJECT_STATUSES = [
   { id: "archived", label: "Archived" },
 ];
 
+const PROJECT_VISIBILITIES = [
+  { id: "public", label: "Public (on site)" },
+  { id: "private", label: "Private (Foundry only)" },
+];
+
+const REPO_SLUG_RE = /^[a-z][a-z0-9-]{1,46}$/;
+
 let state = { view: "projects", projects: [], selectedProject: null, tasks: [], prompts: [] };
 
 function token() {
@@ -133,7 +140,15 @@ function renderProjects() {
   const addBtn = el("button", "btn btn-sm", "New project");
   addBtn.onclick = () => showNewProjectForm();
   toolbar.appendChild(addBtn);
+  const spacer = el("span", "toolbar-spacer");
+  toolbar.appendChild(spacer);
+  const publishBtn = el("button", "btn btn-sm", "Publish public site");
+  publishBtn.onclick = () => publishPublicSite(publishBtn);
+  toolbar.appendChild(publishBtn);
   main.appendChild(toolbar);
+  main.appendChild(
+    el("p", "field-hint toolbar-hint", "Syncs active portfolio projects and deploys to the public site.")
+  );
 
   const grid = el("div", "project-grid");
   for (const p of state.projects) {
@@ -141,7 +156,8 @@ function renderProjects() {
     card.innerHTML = `
       <div class="ref mono">${p.ref}</div>
       <h3>${escapeHtml(p.name)}</h3>
-      <div class="stage">${p.stage} · ${p.status} · ${p.form}</div>
+      <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}</div>
+      ${p.repo_slug ? `<div class="repo-slug mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
     `;
     card.onclick = () => loadProject(p.id);
     grid.appendChild(card);
@@ -161,7 +177,8 @@ function renderProjectDetail() {
   head.innerHTML = `
     <p class="overline mono">${p.ref}</p>
     <h2>${escapeHtml(p.name)}</h2>
-    <p class="project-meta mono">${escapeHtml(p.stage)} · ${escapeHtml(p.status)} · ${escapeHtml(p.form)}</p>
+    <p class="project-meta mono">${escapeHtml(p.stage)} · ${escapeHtml(p.status)} · ${escapeHtml(p.visibility || "public")} · ${escapeHtml(p.form)}</p>
+    ${p.repo_slug ? `<p class="project-meta mono">GitHub: perrinresearch/${escapeHtml(p.repo_slug)}</p>` : ""}
     <p style="color:var(--color-text-muted)">${escapeHtml(p.hypothesis)}</p>
   `;
   main.appendChild(head);
@@ -177,12 +194,6 @@ function renderProjectDetail() {
     if (title) api(`/api/projects/${p.id}/tasks`, { method: "POST", body: JSON.stringify({ title }) }).then(() => loadProject(p.id));
   };
   toolbar.appendChild(addTask);
-
-  if (p.can_deploy_site) {
-    const deployBtn = el("button", "btn btn-sm", "Push to site");
-    deployBtn.onclick = () => pushSiteDeploy(p.id, deployBtn);
-    toolbar.appendChild(deployBtn);
-  }
   main.appendChild(toolbar);
 
   const board = el("div", "kanban");
@@ -337,6 +348,12 @@ function showNewProjectForm() {
     </select>
     <label for="np-stage">Pipeline stage</label>
     <select id="np-stage"></select>
+    <label for="np-visibility">Visibility</label>
+    <select id="np-visibility"></select>
+    <p class="field-hint">Public projects appear on the site when you publish. Private stay in Foundry only.</p>
+    <label for="np-repo">GitHub repo (optional)</label>
+    <input id="np-repo" type="text" placeholder="my-project-slug" autocomplete="off" />
+    <p class="field-hint">Lowercase slug for local WSL provision (e.g. restore79). Blank = no GitHub repo.</p>
     <div class="task-editor-buttons">
       <button type="button" class="btn" id="np-save">Create</button>
       <button type="button" class="btn btn-sm secondary" id="np-cancel">Cancel</button>
@@ -352,6 +369,14 @@ function showNewProjectForm() {
     if (s.id === "idea") o.selected = true;
     stageSel.appendChild(o);
   }
+  const visSel = panel.querySelector("#np-visibility");
+  for (const v of PROJECT_VISIBILITIES) {
+    const o = document.createElement("option");
+    o.value = v.id;
+    o.textContent = v.label;
+    if (v.id === "public") o.selected = true;
+    visSel.appendChild(o);
+  }
 
   panel.querySelector("#np-cancel").onclick = closeProjectCreator;
   panel.querySelector("#np-save").onclick = async () => {
@@ -360,6 +385,7 @@ function showNewProjectForm() {
     const ref = panel.querySelector("#np-ref").value.trim().toUpperCase();
     const name = panel.querySelector("#np-name").value.trim();
     const hypothesis = panel.querySelector("#np-hyp").value.trim();
+    const repoSlug = panel.querySelector("#np-repo").value.trim().toLowerCase();
     if (!ref || !name) {
       errEl.textContent = "Ref and name are required.";
       errEl.classList.remove("hidden");
@@ -367,6 +393,12 @@ function showNewProjectForm() {
     }
     if (!/^[A-Z0-9-]+$/.test(ref)) {
       errEl.textContent = "Ref must use only letters, numbers, and hyphens (e.g. PR-007).";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    if (repoSlug && !REPO_SLUG_RE.test(repoSlug)) {
+      errEl.textContent =
+        "GitHub repo slug must be lowercase, start with a letter, and use only letters, numbers, and hyphens (2–47 chars).";
       errEl.classList.remove("hidden");
       return;
     }
@@ -379,6 +411,8 @@ function showNewProjectForm() {
           hypothesis,
           form: panel.querySelector("#np-form").value,
           stage: stageSel.value,
+          visibility: visSel.value,
+          repo_slug: repoSlug,
         }),
       });
       closeProjectCreator();
@@ -417,7 +451,13 @@ function showProjectEditor(project) {
     <textarea id="pj-hyp" placeholder="What are you testing?"></textarea>
     <label for="pj-stage">Pipeline stage</label>
     <select id="pj-stage"></select>
-    <p class="field-hint">Name, hypothesis, and stage sync to the public site when you Push to site (PR-000).</p>
+    <p class="field-hint">Name, hypothesis, and stage sync to the public site when you publish from the Projects view.</p>
+    <label for="pj-visibility">Visibility</label>
+    <select id="pj-visibility"></select>
+    <p class="field-hint">Private projects stay in Foundry and are removed from the public site on publish.</p>
+    <label for="pj-repo">GitHub repo (optional)</label>
+    <input id="pj-repo" type="text" placeholder="my-project-slug" autocomplete="off" />
+    <p class="field-hint">Lowercase slug for local WSL provision; blank = no GitHub.</p>
     <label for="pj-status">Project status</label>
     <select id="pj-status"></select>
     <p class="field-hint">Internal only — archived projects stay out of site sync.</p>
@@ -430,6 +470,7 @@ function showProjectEditor(project) {
 
   panel.querySelector("#pj-name").value = project.name || "";
   panel.querySelector("#pj-hyp").value = project.hypothesis || "";
+  panel.querySelector("#pj-repo").value = project.repo_slug || "";
 
   const stageSel = panel.querySelector("#pj-stage");
   for (const s of PROJECT_STAGES) {
@@ -447,14 +488,29 @@ function showProjectEditor(project) {
     if (s.id === project.status) o.selected = true;
     statusSel.appendChild(o);
   }
+  const visSel = panel.querySelector("#pj-visibility");
+  for (const v of PROJECT_VISIBILITIES) {
+    const o = document.createElement("option");
+    o.value = v.id;
+    o.textContent = v.label;
+    if (v.id === (project.visibility || "public")) o.selected = true;
+    visSel.appendChild(o);
+  }
 
   panel.querySelector("#pj-cancel").onclick = closeProjectEditor;
   panel.querySelector("#pj-save").onclick = async () => {
     const errEl = panel.querySelector("#pj-error");
     errEl.classList.add("hidden");
     const name = panel.querySelector("#pj-name").value.trim();
+    const repoSlug = panel.querySelector("#pj-repo").value.trim().toLowerCase();
     if (!name) {
       errEl.textContent = "Name is required.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    if (repoSlug && !REPO_SLUG_RE.test(repoSlug)) {
+      errEl.textContent =
+        "GitHub repo slug must be lowercase, start with a letter, and use only letters, numbers, and hyphens (2–47 chars).";
       errEl.classList.remove("hidden");
       return;
     }
@@ -466,6 +522,8 @@ function showProjectEditor(project) {
           hypothesis: panel.querySelector("#pj-hyp").value.trim(),
           stage: stageSel.value,
           status: statusSel.value,
+          visibility: visSel.value,
+          repo_slug: repoSlug,
         }),
       });
       closeProjectEditor();
@@ -679,7 +737,7 @@ function showTaskEditor(task) {
   panel.querySelector("#te-title").focus();
 }
 
-async function pushSiteDeploy(projectId, btn) {
+async function publishPublicSite(btn) {
   const logId = "deploy-log";
   let logEl = document.getElementById(logId);
   if (!logEl) {
@@ -689,9 +747,9 @@ async function pushSiteDeploy(projectId, btn) {
   }
   logEl.textContent = "Building and deploying site…";
   btn.disabled = true;
-  btn.textContent = "Deploying…";
+  btn.textContent = "Publishing…";
   try {
-    const res = await fetch(`${API}/api/projects/${projectId}/deploy-site`, {
+    const res = await fetch(`${API}/api/site/deploy`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -717,7 +775,7 @@ async function pushSiteDeploy(projectId, btn) {
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "Push to site";
+    btn.textContent = "Publish public site";
   }
 }
 

@@ -33,6 +33,8 @@ class ProjectCreate(BaseModel):
     hypothesis: str = ""
     form: str = "interactive"
     stage: str = "idea"
+    visibility: str = "public"
+    repo_slug: str = Field(default="", max_length=47, pattern=r"^$|^[a-z][a-z0-9-]{1,46}$")
 
 
 class ProjectUpdate(BaseModel):
@@ -41,6 +43,10 @@ class ProjectUpdate(BaseModel):
     form: str | None = None
     stage: str | None = None
     status: str | None = None
+    visibility: str | None = None
+    repo_slug: str | None = Field(
+        default=None, max_length=47, pattern=r"^$|^[a-z][a-z0-9-]{1,46}$"
+    )
 
 
 class ProjectOut(BaseModel):
@@ -51,6 +57,8 @@ class ProjectOut(BaseModel):
     form: str
     stage: str
     status: str
+    visibility: str = "public"
+    repo_slug: str = ""
     owner_id: int
     created_at: datetime
     updated_at: datetime

@@ -6,9 +6,27 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 from foundry.config import settings
+from foundry.deploy.portfolio import sync_portfolio_from_db
+from foundry.schemas import SiteDeployOut
 
 SITE_PROJECT_REF = "PR-000"
+
+
+class SiteDeployError(Exception):
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        *,
+        detail: dict | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.message = message
+        self.detail = detail
 
 
 @dataclass
@@ -57,3 +75,38 @@ def deploy_public_site() -> DeployResult:
 
 def project_supports_site_deploy(ref: str) -> bool:
     return ref == SITE_PROJECT_REF
+
+
+def run_site_deploy(db: Session) -> SiteDeployOut:
+    """Sync active portfolio projects and publish the public site."""
+    sync = sync_portfolio_from_db(db)
+    if not sync.success:
+        raise SiteDeployError(400, sync.message)
+    result = deploy_public_site()
+    if not result.success:
+        raise SiteDeployError(
+            502,
+            result.message,
+            detail={
+                "message": result.message,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "exit_code": result.exit_code,
+                "target_url": result.target_url,
+                "public_dir": result.public_dir,
+                "synced_refs": sync.updated_refs,
+            },
+        )
+    deploy_message = result.message
+    if sync.updated_refs:
+        deploy_message = f"{sync.message} {deploy_message}"
+    return SiteDeployOut(
+        success=result.success,
+        message=deploy_message,
+        stdout=result.stdout,
+        stderr=result.stderr,
+        exit_code=result.exit_code,
+        target_url=result.target_url,
+        public_dir=result.public_dir,
+        synced_refs=sync.updated_refs,
+    )

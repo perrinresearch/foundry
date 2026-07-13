@@ -80,3 +80,35 @@ def migrate_task_statuses(engine: Engine) -> None:
         return
     with engine.begin() as conn:
         conn.execute(text("UPDATE tasks SET status = 'backlog' WHERE status = 'todo'"))
+
+
+def migrate_project_visibility(engine: Engine) -> None:
+    """Add projects.visibility (public|private); existing rows default to public."""
+    insp = inspect(engine)
+    if "projects" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("projects")}
+    if "visibility" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE projects ADD COLUMN visibility VARCHAR(32) NOT NULL DEFAULT 'public'"
+            )
+        )
+
+
+def migrate_project_repo_slug(engine: Engine) -> None:
+    """Add projects.repo_slug for local WSL GitHub provision (empty = no repo)."""
+    insp = inspect(engine)
+    if "projects" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("projects")}
+    if "repo_slug" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE projects ADD COLUMN repo_slug VARCHAR(47) NOT NULL DEFAULT ''"
+            )
+        )

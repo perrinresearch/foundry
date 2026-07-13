@@ -206,6 +206,7 @@ textarea { min-height: 5rem; resize: vertical; }
 .project-card .ref { color: var(--color-ember); font-size: 0.75rem; letter-spacing: 0.1em; }
 .project-card h3 { margin: 0.35rem 0; font-size: 1.125rem; }
 .project-card .stage { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; }
+.project-card .repo-slug { font-size: 0.7rem; color: var(--color-text-muted); margin-top: 0.35rem; }
 
 .kanban {
   display: grid;
@@ -402,6 +403,8 @@ textarea { min-height: 5rem; resize: vertical; }
   border-radius: var(--radius-sm);
 }
 .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+.toolbar-spacer { flex: 1; min-width: 0.5rem; }
+.toolbar-hint { margin-top: -0.5rem; margin-bottom: 1rem; }
 .error { color: var(--color-ember); font-size: 0.875rem; margin-top: 0.5rem; }
 .deploy-log {
   margin-top: 1rem;

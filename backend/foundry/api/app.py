@@ -15,13 +15,22 @@ from sqlalchemy.orm import Session, joinedload
 from foundry.auth import create_token, get_current_user, hash_password, verify_password
 from foundry.config import settings
 from foundry.database import Base, SessionLocal, engine, get_db
-from foundry.migrate import migrate_agent_prompts_to_tasks, migrate_task_statuses
-from foundry.deploy.portfolio import sync_portfolio_from_db
-from foundry.deploy.site import deploy_public_site, project_supports_site_deploy
+from foundry.migrate import (
+    migrate_agent_prompts_to_tasks,
+    migrate_project_repo_slug,
+    migrate_project_visibility,
+    migrate_task_statuses,
+)
+from foundry.deploy.site import (
+    SiteDeployError,
+    project_supports_site_deploy,
+    run_site_deploy,
+)
 from foundry.models import (
     AGENT_STATUSES,
     PROJECT_STAGES,
     PROJECT_STATUSES,
+    PROJECT_VISIBILITIES,
     TASK_STATUSES,
     AgentPrompt,
     Project,
@@ -66,6 +75,8 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
     migrate_agent_prompts_to_tasks(engine)
     migrate_task_statuses(engine)
+    migrate_project_visibility(engine)
+    migrate_project_repo_slug(engine)
     db = SessionLocal()
     try:
         seed_database(db)
@@ -83,6 +94,8 @@ def project_out(project: Project, db: Session) -> ProjectOut:
         form=project.form,
         stage=project.stage,
         status=project.status,
+        visibility=getattr(project, "visibility", None) or "public",
+        repo_slug=getattr(project, "repo_slug", None) or "",
         owner_id=project.owner_id,
         created_at=project.created_at,
         updated_at=project.updated_at,
@@ -162,6 +175,10 @@ def create_project(
 ):
     if db.query(Project).filter(Project.ref == body.ref).first():
         raise HTTPException(400, "Project ref already exists")
+    if body.stage not in PROJECT_STAGES:
+        raise HTTPException(400, f"Invalid stage; use one of {PROJECT_STAGES}")
+    if body.visibility not in PROJECT_VISIBILITIES:
+        raise HTTPException(400, f"Invalid visibility; use one of {PROJECT_VISIBILITIES}")
     project = Project(**body.model_dump(), owner_id=user.id)
     db.add(project)
     db.commit()
@@ -196,11 +213,31 @@ def update_project(
         raise HTTPException(400, f"Invalid stage; use one of {PROJECT_STAGES}")
     if "status" in data and data["status"] not in PROJECT_STATUSES:
         raise HTTPException(400, f"Invalid status; use one of {PROJECT_STATUSES}")
+    if "visibility" in data and data["visibility"] not in PROJECT_VISIBILITIES:
+        raise HTTPException(400, f"Invalid visibility; use one of {PROJECT_VISIBILITIES}")
     for key, val in data.items():
         setattr(project, key, val)
     db.commit()
     db.refresh(project)
     return project_out(project, db)
+
+
+def _site_deploy_or_http_error(db: Session) -> SiteDeployOut:
+    try:
+        return run_site_deploy(db)
+    except SiteDeployError as exc:
+        if exc.detail is not None:
+            raise HTTPException(exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(exc.status_code, exc.message) from exc
+
+
+@app.post("/api/site/deploy", response_model=SiteDeployOut)
+def deploy_public_site_endpoint(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Sync active portfolio projects and publish the public site."""
+    return _site_deploy_or_http_error(db)
 
 
 @app.post("/api/projects/{project_id}/deploy-site", response_model=SiteDeployOut)
@@ -209,7 +246,7 @@ def deploy_site(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    """Build Astro site and publish to public docroot (PR-000 only)."""
+    """Legacy endpoint — use POST /api/site/deploy. Kept for PR-000 compatibility."""
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
@@ -218,36 +255,7 @@ def deploy_site(
             400,
             f"Site deploy is only available for project {project.ref}.",
         )
-    sync = sync_portfolio_from_db(db)
-    if not sync.success:
-        raise HTTPException(400, sync.message)
-    result = deploy_public_site()
-    if not result.success:
-        raise HTTPException(
-            502,
-            detail={
-                "message": result.message,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "exit_code": result.exit_code,
-                "target_url": result.target_url,
-                "public_dir": result.public_dir,
-                "synced_refs": sync.updated_refs,
-            },
-        )
-    deploy_message = result.message
-    if sync.updated_refs:
-        deploy_message = f"{sync.message} {deploy_message}"
-    return SiteDeployOut(
-        success=result.success,
-        message=deploy_message,
-        stdout=result.stdout,
-        stderr=result.stderr,
-        exit_code=result.exit_code,
-        target_url=result.target_url,
-        public_dir=result.public_dir,
-        synced_refs=sync.updated_refs,
-    )
+    return _site_deploy_or_http_error(db)
 
 
 # --- Tasks (kanban) ---

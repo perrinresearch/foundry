@@ -51,7 +51,8 @@ venv/bin/pip install -r backend/requirements.txt
 | `GET /api/projects` | List projects |
 | `POST /api/projects` | Create project |
 | `PATCH /api/projects/{id}` | Update project (stage, status, etc.) |
-| `POST /api/projects/{id}/deploy-site` | Sync pipeline to public site and deploy (PR-000) |
+| `POST /api/site/deploy` | Sync active portfolio projects and publish public site |
+| `POST /api/projects/{id}/deploy-site` | Legacy deploy endpoint (PR-000 only; prefer `/api/site/deploy`) |
 | `GET /api/projects/{id}/tasks` | Kanban tasks |
 | `PATCH /api/tasks/{id}` | Move task column |
 | `GET /api/agent-prompts` | Agent prompt queue (`?project_id=` or `?task_id=`) |
@@ -79,9 +80,11 @@ For local dev against emulator: `http://10.0.2.2:8000`
 | `FOUNDRY_SITE_PUBLIC_URL` | `https://dev.perrinresearch.com` |
 | `FOUNDRY_SITE_PUBLIC_DIR` | `.../dev.perrinresearch.com/public` |
 
-## Site deploy (PR-000)
+## Site deploy
 
-From the Foundry UI, open project **PR-000 · Perrin Research** and click **Push to site**. This runs the Astro build and rsyncs to the public docroot (currently dev.perrinresearch.com; set `FOUNDRY_SITE_PUBLIC_URL` when moving to perrinresearch.com).
+From the Foundry UI, open **Projects** and click **Publish public site**. This syncs **active, public** pipeline projects into the public portfolio (creating new entries when needed, removing private/archived ones), runs the Astro build, and rsyncs to the public docroot (currently dev.perrinresearch.com; set `FOUNDRY_SITE_PUBLIC_URL` when moving to perrinresearch.com).
+
+Set a project's **Visibility** to **Private** to keep it in Foundry without showing it on the public site.
 
 ## Deployment (planned)
 
