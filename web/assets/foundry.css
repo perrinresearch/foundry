@@ -146,6 +146,63 @@ h1, h2, h3, h4 { line-height: 1.12; font-weight: 700; letter-spacing: -0.02em; }
 .nav-tabs button:hover { color: var(--color-text); border-bottom-color: var(--color-ember); }
 .nav-tabs button { letter-spacing: 0.12em; transition: color 0.15s ease, border-color 0.15s ease; }
 
+.user-menu {
+  position: relative;
+  margin-left: 0.25rem;
+}
+.user-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-raised);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.user-menu-toggle:hover,
+.user-menu-toggle[aria-expanded="true"] {
+  color: var(--color-text);
+  border-color: var(--color-ember-deep);
+}
+.user-menu-icon { display: block; }
+.user-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  min-width: 11rem;
+  padding: 0.35rem;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.user-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.user-menu-item:hover {
+  background: var(--color-bg-raised);
+  color: var(--color-ember);
+}
+
 .main { flex: 1; max-width: 74rem; margin: 0 auto; padding: 1.5rem; width: 100%; }
 
 .login-card {
@@ -499,5 +556,15 @@ textarea { min-height: 5rem; resize: vertical; }
     padding: 0.5rem 0;
   }
 
-  #logout-btn { width: 100%; }
+  .user-menu {
+    margin-left: 0;
+    width: 100%;
+  }
+  .user-menu-toggle { align-self: flex-start; }
+  .user-menu-dropdown {
+    position: static;
+    margin-top: 0.5rem;
+    width: 100%;
+    box-shadow: none;
+  }
 }

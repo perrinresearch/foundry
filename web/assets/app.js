@@ -80,6 +80,7 @@ function showLogin() {
   document.getElementById("login-view").classList.remove("hidden");
   document.getElementById("app-view").classList.add("hidden");
   state.me = null;
+  closeUserMenu();
   updateAdminNav();
 }
 
@@ -89,11 +90,11 @@ function showApp() {
 }
 
 function updateAdminNav() {
-  const usersNav = document.getElementById("nav-users");
-  if (!usersNav) return;
-  if (state.me?.is_admin) usersNav.classList.remove("hidden");
+  const usersItem = document.getElementById("menu-users");
+  if (!usersItem) return;
+  if (state.me?.is_admin) usersItem.classList.remove("hidden");
   else {
-    usersNav.classList.add("hidden");
+    usersItem.classList.add("hidden");
     if (state.view === "users") {
       state.view = "projects";
       document.querySelectorAll(".nav-tabs button").forEach((b) => {
@@ -101,6 +102,22 @@ function updateAdminNav() {
       });
     }
   }
+}
+
+function closeUserMenu() {
+  const toggle = document.getElementById("user-menu-toggle");
+  const dropdown = document.getElementById("user-menu-dropdown");
+  toggle?.setAttribute("aria-expanded", "false");
+  dropdown?.classList.add("hidden");
+}
+
+function toggleUserMenu() {
+  const toggle = document.getElementById("user-menu-toggle");
+  const dropdown = document.getElementById("user-menu-dropdown");
+  if (!toggle || !dropdown) return;
+  const open = toggle.getAttribute("aria-expanded") === "true";
+  toggle.setAttribute("aria-expanded", String(!open));
+  dropdown.classList.toggle("hidden", open);
 }
 
 async function loadMe() {
@@ -1112,24 +1129,49 @@ navToggle?.addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeMobileNav();
+  if (e.key === "Escape") {
+    closeMobileNav();
+    closeUserMenu();
+  }
 });
 
-document.getElementById("logout-btn").onclick = () => {
+document.getElementById("user-menu-toggle").onclick = (e) => {
+  e.stopPropagation();
+  toggleUserMenu();
+};
+
+document.getElementById("menu-users").onclick = () => {
+  closeUserMenu();
+  closeMobileNav();
+  document.querySelectorAll(".nav-tabs button").forEach((b) => b.classList.remove("active"));
+  state.view = "users";
+  state.selectedProject = null;
+  loadUsers();
+};
+
+document.getElementById("menu-change-password").onclick = () => {
+  closeUserMenu();
+  closeMobileNav();
+  showChangePasswordForm();
+};
+
+document.getElementById("menu-sign-out").onclick = () => {
+  closeUserMenu();
   closeMobileNav();
   closeUserModals();
   setToken(null);
   showLogin();
 };
 
-document.getElementById("change-password-btn").onclick = () => {
-  closeMobileNav();
-  showChangePasswordForm();
-};
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("user-menu");
+  if (menu && !menu.contains(e.target)) closeUserMenu();
+});
 
 document.getElementById("home-link").onclick = (e) => {
   e.preventDefault();
   closeMobileNav();
+  closeUserMenu();
   state.view = "projects";
   state.selectedProject = null;
   document.querySelectorAll(".nav-tabs button").forEach((b) => {
@@ -1141,12 +1183,12 @@ document.getElementById("home-link").onclick = (e) => {
 document.querySelectorAll(".nav-tabs button").forEach((btn) => {
   btn.onclick = () => {
     closeMobileNav();
+    closeUserMenu();
     document.querySelectorAll(".nav-tabs button").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     state.view = btn.dataset.view;
     state.selectedProject = null;
     if (state.view === "agents") loadPrompts();
-    else if (state.view === "users") loadUsers();
     else loadProjects();
   };
 });

@@ -44,10 +44,28 @@
           <nav class="nav-tabs" aria-label="Main navigation">
             <button type="button" data-view="projects" class="active">Projects</button>
             <button type="button" data-view="agents">Agent queue</button>
-            <button type="button" data-view="users" id="nav-users" class="hidden">Users</button>
           </nav>
-          <button type="button" class="btn btn-sm secondary" id="change-password-btn">Change password</button>
-          <button type="button" class="btn btn-sm secondary" id="logout-btn">Sign out</button>
+          <div class="user-menu" id="user-menu">
+            <button
+              type="button"
+              class="user-menu-toggle"
+              id="user-menu-toggle"
+              aria-expanded="false"
+              aria-haspopup="true"
+              aria-controls="user-menu-dropdown"
+              aria-label="Account menu"
+            >
+              <svg class="user-menu-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.75"/>
+                <path d="M5 19.5c1.6-3.2 4-4.8 7-4.8s5.4 1.6 7 4.8" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <div class="user-menu-dropdown hidden" id="user-menu-dropdown" role="menu">
+              <button type="button" class="user-menu-item hidden" id="menu-users" role="menuitem">Users</button>
+              <button type="button" class="user-menu-item" id="menu-change-password" role="menuitem">Change password</button>
+              <button type="button" class="user-menu-item" id="menu-sign-out" role="menuitem">Sign out</button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
