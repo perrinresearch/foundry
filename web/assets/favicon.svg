@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Perrin Research brand mark: diamond -->
+  <rect
+    x="10"
+    y="10"
+    width="12"
+    height="12"
+    rx="1.5"
+    fill="#ff5a5a"
+    transform="rotate(45 16 16)"
+  />
+</svg>
