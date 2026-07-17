@@ -382,6 +382,26 @@ function renderProjectDetail() {
   editProject.type = "button";
   editProject.onclick = () => showProjectEditor(p);
   toolbar.appendChild(editProject);
+  if (p.status === "archived") {
+    const unarchiveProject = el("button", "btn btn-sm secondary", "Unarchive project");
+    unarchiveProject.type = "button";
+    unarchiveProject.onclick = async () => {
+      unarchiveProject.disabled = true;
+      unarchiveProject.textContent = "Unarchiving…";
+      try {
+        await api(`/api/projects/${p.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "active" }),
+        });
+        await loadProject(p.id);
+      } catch (err) {
+        alert(err.message);
+        unarchiveProject.disabled = false;
+        unarchiveProject.textContent = "Unarchive project";
+      }
+    };
+    toolbar.appendChild(unarchiveProject);
+  }
   const addTask = el("button", "btn btn-sm", "+ Task");
   addTask.onclick = () => {
     const title = prompt("Task title");
