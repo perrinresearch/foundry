@@ -263,7 +263,14 @@ textarea { min-height: 5rem; resize: vertical; }
 .project-card .ref { color: var(--color-ember); font-size: 0.75rem; letter-spacing: 0.1em; }
 .project-card h3 { margin: 0.35rem 0; font-size: 1.125rem; }
 .project-card .stage { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; }
-.project-card .repo-slug { font-size: 0.7rem; color: var(--color-text-muted); margin-top: 0.35rem; }
+.project-card .repo-slug,
+.project-card .project-submeta {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-top: 0.35rem;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
 
 .users-table {
   width: 100%;
@@ -366,10 +373,17 @@ textarea { min-height: 5rem; resize: vertical; }
   z-index: 100;
 }
 .task-editor {
-  width: min(100%, 28rem);
+  width: min(100%, 42rem);
+  max-width: 42rem; /* override .login-card (24rem) when used as a modal */
   margin: 0;
   max-height: 90vh;
   overflow-y: auto;
+}
+@media (min-width: 720px) {
+  .task-editor {
+    width: min(100%, 42rem);
+    padding: 2rem 2.25rem;
+  }
 }
 .task-editor-buttons {
   display: flex;

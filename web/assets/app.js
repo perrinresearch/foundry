@@ -212,8 +212,9 @@ function renderProjects() {
     card.innerHTML = `
       <div class="ref mono">${p.ref}</div>
       <h3>${escapeHtml(p.name)}</h3>
-      <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}${p.customer ? ` · ${escapeHtml(p.customer)}` : ""}</div>
-      ${p.repo_slug ? `<div class="repo-slug mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
+      <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}</div>
+      ${p.customer ? `<div class="project-submeta mono">customer: ${escapeHtml(p.customer)}</div>` : ""}
+      ${p.repo_slug ? `<div class="project-submeta mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
     `;
     card.onclick = () => loadProject(p.id);
     grid.appendChild(card);
@@ -233,7 +234,8 @@ function renderProjectDetail() {
   head.innerHTML = `
     <p class="overline mono">${p.ref}</p>
     <h2>${escapeHtml(p.name)}</h2>
-    <p class="project-meta mono">${escapeHtml(p.stage)} · ${escapeHtml(p.status)} · ${escapeHtml(p.visibility || "public")} · ${escapeHtml(p.form)}${p.customer ? ` · ${escapeHtml(p.customer)}` : ""}</p>
+    <p class="project-meta mono">${escapeHtml(p.stage)} · ${escapeHtml(p.status)} · ${escapeHtml(p.visibility || "public")} · ${escapeHtml(p.form)}</p>
+    ${p.customer ? `<p class="project-meta mono">Customer: ${escapeHtml(p.customer)}</p>` : ""}
     ${p.repo_slug ? `<p class="project-meta mono">GitHub: perrinresearch/${escapeHtml(p.repo_slug)}</p>` : ""}
     <p style="color:var(--color-text-muted)">${escapeHtml(p.hypothesis)}</p>
   `;
