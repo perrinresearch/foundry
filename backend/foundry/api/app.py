@@ -26,6 +26,7 @@ from foundry.migrate import (
     migrate_project_repo_slug,
     migrate_project_visibility,
     migrate_project_customer,
+    migrate_project_priority,
     migrate_task_statuses,
     migrate_user_admin_flags,
 )
@@ -39,6 +40,7 @@ from foundry.models import (
     PROJECT_STAGES,
     PROJECT_STATUSES,
     PROJECT_VISIBILITIES,
+    PROJECT_PRIORITIES,
     TASK_STATUSES,
     AgentPrompt,
     Project,
@@ -88,6 +90,7 @@ def on_startup():
     migrate_project_visibility(engine)
     migrate_project_repo_slug(engine)
     migrate_project_customer(engine)
+    migrate_project_priority(engine)
     migrate_user_admin_flags(engine)
     db = SessionLocal()
     try:
@@ -107,6 +110,7 @@ def project_out(project: Project, db: Session) -> ProjectOut:
         form=project.form,
         stage=project.stage,
         status=project.status,
+        priority=getattr(project, "priority", None) or "normal",
         visibility=getattr(project, "visibility", None) or "public",
         repo_slug=getattr(project, "repo_slug", None) or "",
         owner_id=project.owner_id,
@@ -264,6 +268,8 @@ def create_project(
         raise HTTPException(400, "Project ref already exists")
     if body.stage not in PROJECT_STAGES:
         raise HTTPException(400, f"Invalid stage; use one of {PROJECT_STAGES}")
+    if body.priority not in PROJECT_PRIORITIES:
+        raise HTTPException(400, f"Invalid priority; use one of {PROJECT_PRIORITIES}")
     if body.visibility not in PROJECT_VISIBILITIES:
         raise HTTPException(400, f"Invalid visibility; use one of {PROJECT_VISIBILITIES}")
     project = Project(**body.model_dump(), owner_id=user.id)
@@ -300,6 +306,8 @@ def update_project(
         raise HTTPException(400, f"Invalid stage; use one of {PROJECT_STAGES}")
     if "status" in data and data["status"] not in PROJECT_STATUSES:
         raise HTTPException(400, f"Invalid status; use one of {PROJECT_STATUSES}")
+    if "priority" in data and data["priority"] not in PROJECT_PRIORITIES:
+        raise HTTPException(400, f"Invalid priority; use one of {PROJECT_PRIORITIES}")
     if "visibility" in data and data["visibility"] not in PROJECT_VISIBILITIES:
         raise HTTPException(400, f"Invalid visibility; use one of {PROJECT_VISIBILITIES}")
     for key, val in data.items():

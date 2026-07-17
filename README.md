@@ -56,7 +56,7 @@ venv/bin/pip install -r backend/requirements.txt
 | `PATCH /api/users/{id}` | Update admin/active flags or set temp password (admin) |
 | `GET /api/projects` | List projects |
 | `POST /api/projects` | Create project |
-| `PATCH /api/projects/{id}` | Update project (stage, status, visibility, repo_slug, etc.) |
+| `PATCH /api/projects/{id}` | Update project (stage, status, visibility, priority, repo_slug, etc.) |
 | `POST /api/site/deploy` | Sync active portfolio projects and publish public site |
 | `POST /api/projects/{id}/deploy-site` | Legacy deploy endpoint (PR-000 only; prefer `/api/site/deploy`) |
 | `GET /api/projects/{id}/tasks` | Kanban tasks |
@@ -75,6 +75,12 @@ venv/bin/pip install -r backend/requirements.txt
 - Any signed-in user can **Change password** from the header.
 - Admins can set a temporary password, promote/demote admins, and revoke/restore access.
 - The first user (preferring `scott@perrinresearch.com`) is bootstrapped as admin on startup if no admin exists.
+
+## Pipeline triage
+
+- Projects have a **Priority** tier: Critical, High, Normal, or Low. New projects default to Normal.
+- The Pipeline toolbar includes **Group by**: None, Stage, Status, Visibility, or Priority.
+- Priority and grouping are internal Foundry triage fields; they do not change public site sync behavior.
 
 ## Android
 

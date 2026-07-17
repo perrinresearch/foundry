@@ -32,7 +32,15 @@ const PROJECT_VISIBILITIES = [
   { id: "private", label: "Private (Foundry only)" },
 ];
 
+const PROJECT_PRIORITIES = [
+  { id: "critical", label: "Critical" },
+  { id: "high", label: "High" },
+  { id: "normal", label: "Normal" },
+  { id: "low", label: "Low" },
+];
+
 const REPO_SLUG_RE = /^[a-z][a-z0-9-]{1,46}$/;
+const GROUP_BY_KEY = "foundry_group_by";
 
 let state = {
   view: "projects",
@@ -141,6 +149,10 @@ function el(tag, cls, html) {
   return e;
 }
 
+function labelFor(items, id) {
+  return items.find((item) => item.id === id)?.label || id;
+}
+
 async function loadProjects() {
   state.projects = await api("/api/projects");
   state.selectedProject = null;
@@ -193,6 +205,27 @@ function renderProjects() {
   main.innerHTML = "";
   const toolbar = el("div", "toolbar");
   toolbar.innerHTML = `<p class="overline">Pipeline</p>`;
+
+  const groupWrap = el("label", "group-by-control mono");
+  groupWrap.setAttribute("for", "group-by-select");
+  groupWrap.textContent = "Group by";
+  const groupSelect = document.createElement("select");
+  groupSelect.id = "group-by-select";
+  groupSelect.innerHTML = `
+    <option value="none">None</option>
+    <option value="stage">Stage</option>
+    <option value="status">Status</option>
+    <option value="visibility">Visibility</option>
+    <option value="priority">Priority</option>
+  `;
+  groupSelect.value = localStorage.getItem(GROUP_BY_KEY) || "none";
+  groupSelect.onchange = () => {
+    localStorage.setItem(GROUP_BY_KEY, groupSelect.value);
+    renderProjects();
+  };
+  groupWrap.appendChild(groupSelect);
+  toolbar.appendChild(groupWrap);
+
   const addBtn = el("button", "btn btn-sm", "New project");
   addBtn.onclick = () => showNewProjectForm();
   toolbar.appendChild(addBtn);
@@ -206,20 +239,52 @@ function renderProjects() {
     el("p", "field-hint toolbar-hint", "Syncs active portfolio projects and deploys to the public site.")
   );
 
-  const grid = el("div", "project-grid");
-  for (const p of state.projects) {
-    const card = el("div", "project-card");
-    card.innerHTML = `
-      <div class="ref mono">${p.ref}</div>
-      <h3>${escapeHtml(p.name)}</h3>
-      <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}</div>
-      ${p.customer ? `<div class="project-submeta mono">customer: ${escapeHtml(p.customer)}</div>` : ""}
-      ${p.repo_slug ? `<div class="project-submeta mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
-    `;
-    card.onclick = () => loadProject(p.id);
-    grid.appendChild(card);
+  const groupBy = groupSelect.value;
+  if (groupBy === "none") {
+    main.appendChild(renderProjectGrid(state.projects));
+    return;
   }
-  main.appendChild(grid);
+
+  for (const group of projectGroups(groupBy)) {
+    const projects = state.projects.filter((p) => (p[groupBy] || group.fallback) === group.id);
+    if (!projects.length) continue;
+    const section = el("section", "project-group");
+    section.appendChild(el("h3", "project-group-title mono", group.label));
+    section.appendChild(renderProjectGrid(projects));
+    main.appendChild(section);
+  }
+}
+
+function renderProjectGrid(projects) {
+  const grid = el("div", "project-grid");
+  for (const p of [...projects].sort((a, b) => a.ref.localeCompare(b.ref))) {
+    grid.appendChild(renderProjectCard(p));
+  }
+  return grid;
+}
+
+function renderProjectCard(p) {
+  const card = el("div", "project-card");
+  card.innerHTML = `
+    <div class="ref mono">${p.ref}</div>
+    <h3>${escapeHtml(p.name)}</h3>
+    <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}</div>
+    <div class="project-submeta mono">priority: ${escapeHtml(p.priority || "normal")}</div>
+    ${p.customer ? `<div class="project-submeta mono">customer: ${escapeHtml(p.customer)}</div>` : ""}
+    ${p.repo_slug ? `<div class="project-submeta mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
+  `;
+  card.onclick = () => loadProject(p.id);
+  return card;
+}
+
+function projectGroups(groupBy) {
+  if (groupBy === "stage") return PROJECT_STAGES.map((g) => ({ ...g, fallback: "idea" }));
+  if (groupBy === "status") return PROJECT_STATUSES.map((g) => ({ ...g, fallback: "active" }));
+  if (groupBy === "visibility") {
+    return PROJECT_VISIBILITIES.map((g) => ({ ...g, fallback: "public" }));
+  }
+  if (groupBy === "priority") return PROJECT_PRIORITIES.map((g) => ({ ...g, fallback: "normal" }));
+  return [];
 }
 
 function renderProjectDetail() {
@@ -235,6 +300,7 @@ function renderProjectDetail() {
     <p class="overline mono">${p.ref}</p>
     <h2>${escapeHtml(p.name)}</h2>
     <p class="project-meta mono">${escapeHtml(p.stage)} · ${escapeHtml(p.status)} · ${escapeHtml(p.visibility || "public")} · ${escapeHtml(p.form)}</p>
+    <p class="project-meta mono">Priority: ${escapeHtml(p.priority || "normal")}</p>
     ${p.customer ? `<p class="project-meta mono">Customer: ${escapeHtml(p.customer)}</p>` : ""}
     ${p.repo_slug ? `<p class="project-meta mono">GitHub: perrinresearch/${escapeHtml(p.repo_slug)}</p>` : ""}
     <p style="color:var(--color-text-muted)">${escapeHtml(p.hypothesis)}</p>
@@ -408,6 +474,8 @@ function showNewProjectForm() {
     </select>
     <label for="np-stage">Pipeline stage</label>
     <select id="np-stage"></select>
+    <label for="np-priority">Priority</label>
+    <select id="np-priority"></select>
     <label for="np-visibility">Visibility</label>
     <select id="np-visibility"></select>
     <p class="field-hint">Public projects appear on the site when you publish. Private stay in Foundry only.</p>
@@ -428,6 +496,14 @@ function showNewProjectForm() {
     o.textContent = s.label;
     if (s.id === "idea") o.selected = true;
     stageSel.appendChild(o);
+  }
+  const prioritySel = panel.querySelector("#np-priority");
+  for (const p of PROJECT_PRIORITIES) {
+    const o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = p.label;
+    if (p.id === "normal") o.selected = true;
+    prioritySel.appendChild(o);
   }
   const visSel = panel.querySelector("#np-visibility");
   for (const v of PROJECT_VISIBILITIES) {
@@ -473,6 +549,7 @@ function showNewProjectForm() {
           customer,
           form: panel.querySelector("#np-form").value,
           stage: stageSel.value,
+          priority: prioritySel.value,
           visibility: visSel.value,
           repo_slug: repoSlug,
         }),
@@ -516,6 +593,8 @@ function showProjectEditor(project) {
     <label for="pj-stage">Pipeline stage</label>
     <select id="pj-stage"></select>
     <p class="field-hint">Name, hypothesis, and stage sync to the public site when you publish from the Projects view.</p>
+    <label for="pj-priority">Priority</label>
+    <select id="pj-priority"></select>
     <label for="pj-visibility">Visibility</label>
     <select id="pj-visibility"></select>
     <p class="field-hint">Private projects stay in Foundry and are removed from the public site on publish.</p>
@@ -553,6 +632,14 @@ function showProjectEditor(project) {
     if (s.id === project.status) o.selected = true;
     statusSel.appendChild(o);
   }
+  const prioritySel = panel.querySelector("#pj-priority");
+  for (const p of PROJECT_PRIORITIES) {
+    const o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = p.label;
+    if (p.id === (project.priority || "normal")) o.selected = true;
+    prioritySel.appendChild(o);
+  }
   const visSel = panel.querySelector("#pj-visibility");
   for (const v of PROJECT_VISIBILITIES) {
     const o = document.createElement("option");
@@ -588,6 +675,7 @@ function showProjectEditor(project) {
           customer: panel.querySelector("#pj-customer").value.trim(),
           stage: stageSel.value,
           status: statusSel.value,
+          priority: prioritySel.value,
           visibility: visSel.value,
           repo_slug: repoSlug,
         }),

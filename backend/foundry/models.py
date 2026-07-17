@@ -10,6 +10,7 @@ AGENT_STATUSES = ("pending", "in_progress", "completed", "cancelled")
 PROJECT_STAGES = ("idea", "prototype", "evaluation", "shipped")
 PROJECT_STATUSES = ("active", "archived")
 PROJECT_VISIBILITIES = ("public", "private")
+PROJECT_PRIORITIES = ("critical", "high", "normal", "low")
 
 
 def utcnow() -> datetime:
@@ -43,6 +44,7 @@ class Project(Base):
     stage: Mapped[str] = mapped_column(String(32), default="idea")
     status: Mapped[str] = mapped_column(String(32), default="active")
     visibility: Mapped[str] = mapped_column(String(32), default="public")
+    priority: Mapped[str] = mapped_column(String(32), default="normal")
     # Optional GitHub/local folder name; empty = Foundry-only (no local provision)
     repo_slug: Mapped[str] = mapped_column(String(47), default="")
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))

@@ -145,3 +145,19 @@ def migrate_project_customer(engine: Engine) -> None:
                 "ALTER TABLE projects ADD COLUMN customer VARCHAR(255) NOT NULL DEFAULT ''"
             )
         )
+
+
+def migrate_project_priority(engine: Engine) -> None:
+    """Add projects.priority for internal triage tiers."""
+    insp = inspect(engine)
+    if "projects" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("projects")}
+    if "priority" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE projects ADD COLUMN priority VARCHAR(32) NOT NULL DEFAULT 'normal'"
+            )
+        )

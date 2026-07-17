@@ -60,6 +60,7 @@ class ProjectCreate(BaseModel):
     customer: str = Field(default="", max_length=255)
     form: str = "interactive"
     stage: str = "idea"
+    priority: str = "normal"
     visibility: str = "public"
     repo_slug: str = Field(default="", max_length=47, pattern=REPO_SLUG_PATTERN)
 
@@ -71,6 +72,7 @@ class ProjectUpdate(BaseModel):
     form: str | None = None
     stage: str | None = None
     status: str | None = None
+    priority: str | None = None
     visibility: str | None = None
     repo_slug: str | None = Field(
         default=None, max_length=47, pattern=REPO_SLUG_PATTERN
@@ -86,6 +88,7 @@ class ProjectOut(BaseModel):
     form: str
     stage: str
     status: str
+    priority: str = "normal"
     visibility: str = "public"
     repo_slug: str = ""
     owner_id: int
