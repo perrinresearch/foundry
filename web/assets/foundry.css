@@ -281,10 +281,10 @@ textarea { min-height: 5rem; resize: vertical; }
   margin-top: 1rem;
 }
 .project-group.is-empty {
-  display: none;
+  margin-top: 1rem;
 }
-body.projects-dragging .project-group.is-empty {
-  display: block;
+.project-group.is-empty .project-group-title {
+  margin-bottom: 0.5rem;
 }
 .project-group.drag-over {
   border-color: var(--color-ember);
@@ -300,13 +300,17 @@ body.projects-dragging .project-group.is-empty {
 }
 .project-group .empty-hint {
   grid-column: 1 / -1;
-  padding: 1.25rem;
+  padding: 1rem;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
   text-align: center;
   font-size: 0.8rem;
   letter-spacing: 0.04em;
+}
+body.projects-dragging .project-group.is-empty .empty-hint {
+  border-color: color-mix(in srgb, var(--color-ember) 45%, var(--color-border));
+  color: var(--color-text);
 }
 .project-card {
   background: var(--color-bg-elevated);
