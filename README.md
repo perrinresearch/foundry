@@ -99,6 +99,25 @@ From the Foundry UI, open **Projects** and click **Publish public site**. This s
 
 Set a project's **Visibility** to **Private** to keep it in Foundry without showing it on the public site.
 
-## Deployment (planned)
+## Deployment (VPS)
 
-Mirror Waypoint: subdomain `foundry.perrinresearch.com` with Passenger + `a2wsgi` serving the FastAPI app and static web UI.
+Production: `foundry.perrinresearch.com` via Passenger + `a2wsgi` (FastAPI + static `web/` UI).
+
+On the VPS, from the Foundry checkout:
+
+```bash
+cd ~/foundry   # or wherever the app lives
+git pull origin main
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+```
+
+`scripts/deploy.sh` will:
+
+1. `git pull --ff-only` from `origin/main`
+2. Install `backend/requirements.txt` into `venv/` (or system `pip3`)
+3. Restart the app via Passenger (`touch tmp/restart.txt`)
+
+Optional env overrides: `FOUNDRY_SKIP_PULL=1`, `FOUNDRY_SKIP_DEPS=1`, `FOUNDRY_SYSTEMD_UNIT=foundry` (use systemd instead of Passenger), `FOUNDRY_DEPLOY_BRANCH=main`.
+
+Schema migrations run automatically on app startup (idempotent).
