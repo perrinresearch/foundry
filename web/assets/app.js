@@ -212,7 +212,7 @@ function renderProjects() {
     card.innerHTML = `
       <div class="ref mono">${p.ref}</div>
       <h3>${escapeHtml(p.name)}</h3>
-      <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}</div>
+      <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}${p.customer ? ` · ${escapeHtml(p.customer)}` : ""}</div>
       ${p.repo_slug ? `<div class="repo-slug mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
     `;
     card.onclick = () => loadProject(p.id);
@@ -233,7 +233,7 @@ function renderProjectDetail() {
   head.innerHTML = `
     <p class="overline mono">${p.ref}</p>
     <h2>${escapeHtml(p.name)}</h2>
-    <p class="project-meta mono">${escapeHtml(p.stage)} · ${escapeHtml(p.status)} · ${escapeHtml(p.visibility || "public")} · ${escapeHtml(p.form)}</p>
+    <p class="project-meta mono">${escapeHtml(p.stage)} · ${escapeHtml(p.status)} · ${escapeHtml(p.visibility || "public")} · ${escapeHtml(p.form)}${p.customer ? ` · ${escapeHtml(p.customer)}` : ""}</p>
     ${p.repo_slug ? `<p class="project-meta mono">GitHub: perrinresearch/${escapeHtml(p.repo_slug)}</p>` : ""}
     <p style="color:var(--color-text-muted)">${escapeHtml(p.hypothesis)}</p>
   `;
@@ -397,6 +397,8 @@ function showNewProjectForm() {
     <input id="np-name" type="text" placeholder="Project name" />
     <label for="np-hyp">Hypothesis</label>
     <textarea id="np-hyp" placeholder="What are you testing?"></textarea>
+    <label for="np-customer">Customer / requestor</label>
+    <input id="np-customer" type="text" placeholder="Who asked for this / who it is for" autocomplete="organization" />
     <label for="np-form">Form</label>
     <select id="np-form">
       <option value="interactive">Interactive (application)</option>
@@ -441,6 +443,7 @@ function showNewProjectForm() {
     const ref = panel.querySelector("#np-ref").value.trim().toUpperCase();
     const name = panel.querySelector("#np-name").value.trim();
     const hypothesis = panel.querySelector("#np-hyp").value.trim();
+    const customer = panel.querySelector("#np-customer").value.trim();
     const repoSlug = panel.querySelector("#np-repo").value.trim().toLowerCase();
     if (!ref || !name) {
       errEl.textContent = "Ref and name are required.";
@@ -465,6 +468,7 @@ function showNewProjectForm() {
           ref,
           name,
           hypothesis,
+          customer,
           form: panel.querySelector("#np-form").value,
           stage: stageSel.value,
           visibility: visSel.value,
@@ -505,6 +509,8 @@ function showProjectEditor(project) {
     <input id="pj-name" type="text" />
     <label for="pj-hyp">Hypothesis</label>
     <textarea id="pj-hyp" placeholder="What are you testing?"></textarea>
+    <label for="pj-customer">Customer / requestor</label>
+    <input id="pj-customer" type="text" placeholder="Who asked for this / who it is for" autocomplete="organization" />
     <label for="pj-stage">Pipeline stage</label>
     <select id="pj-stage"></select>
     <p class="field-hint">Name, hypothesis, and stage sync to the public site when you publish from the Projects view.</p>
@@ -526,6 +532,7 @@ function showProjectEditor(project) {
 
   panel.querySelector("#pj-name").value = project.name || "";
   panel.querySelector("#pj-hyp").value = project.hypothesis || "";
+  panel.querySelector("#pj-customer").value = project.customer || "";
   panel.querySelector("#pj-repo").value = project.repo_slug || "";
 
   const stageSel = panel.querySelector("#pj-stage");
@@ -576,6 +583,7 @@ function showProjectEditor(project) {
         body: JSON.stringify({
           name,
           hypothesis: panel.querySelector("#pj-hyp").value.trim(),
+          customer: panel.querySelector("#pj-customer").value.trim(),
           stage: stageSel.value,
           status: statusSel.value,
           visibility: visSel.value,

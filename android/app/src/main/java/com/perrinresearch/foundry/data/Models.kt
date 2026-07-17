@@ -12,6 +12,7 @@ data class Project(
     val stage: String,
     val status: String,
     val repoSlug: String = "",
+    val customer: String = "",
 )
 
 data class Task(
@@ -43,6 +44,7 @@ fun JSONObject.toProject() = Project(
     stage = getString("stage"),
     status = getString("status"),
     repoSlug = optString("repo_slug", ""),
+    customer = optString("customer", ""),
 )
 
 fun JSONObject.toTask() = Task(

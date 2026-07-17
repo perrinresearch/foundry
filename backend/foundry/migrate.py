@@ -129,3 +129,19 @@ def migrate_user_admin_flags(engine: Engine) -> None:
             conn.execute(
                 text("ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1")
             )
+
+
+def migrate_project_customer(engine: Engine) -> None:
+    """Add projects.customer (customer / requestor label)."""
+    insp = inspect(engine)
+    if "projects" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("projects")}
+    if "customer" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE projects ADD COLUMN customer VARCHAR(255) NOT NULL DEFAULT ''"
+            )
+        )

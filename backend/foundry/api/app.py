@@ -25,6 +25,7 @@ from foundry.migrate import (
     migrate_agent_prompts_to_tasks,
     migrate_project_repo_slug,
     migrate_project_visibility,
+    migrate_project_customer,
     migrate_task_statuses,
     migrate_user_admin_flags,
 )
@@ -86,6 +87,7 @@ def on_startup():
     migrate_task_statuses(engine)
     migrate_project_visibility(engine)
     migrate_project_repo_slug(engine)
+    migrate_project_customer(engine)
     migrate_user_admin_flags(engine)
     db = SessionLocal()
     try:
@@ -101,6 +103,7 @@ def project_out(project: Project, db: Session) -> ProjectOut:
         ref=project.ref,
         name=project.name,
         hypothesis=project.hypothesis,
+        customer=getattr(project, "customer", "") or "",
         form=project.form,
         stage=project.stage,
         status=project.status,

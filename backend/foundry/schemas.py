@@ -48,26 +48,32 @@ class AdminUserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8)
     name: str | None = Field(default=None, min_length=1, max_length=255)
 
+# Local/GitHub folder name; blank = no local provision by project_sync
+REPO_SLUG_PATTERN = r"^$|^[a-z][a-z0-9-]{1,46}$"
+
+
 
 class ProjectCreate(BaseModel):
     ref: str = Field(min_length=2, max_length=32, pattern=r"^[A-Z0-9-]+$")
     name: str = Field(min_length=1, max_length=255)
     hypothesis: str = ""
+    customer: str = Field(default="", max_length=255)
     form: str = "interactive"
     stage: str = "idea"
     visibility: str = "public"
-    repo_slug: str = Field(default="", max_length=47, pattern=r"^$|^[a-z][a-z0-9-]{1,46}$")
+    repo_slug: str = Field(default="", max_length=47, pattern=REPO_SLUG_PATTERN)
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     hypothesis: str | None = None
+    customer: str | None = Field(default=None, max_length=255)
     form: str | None = None
     stage: str | None = None
     status: str | None = None
     visibility: str | None = None
     repo_slug: str | None = Field(
-        default=None, max_length=47, pattern=r"^$|^[a-z][a-z0-9-]{1,46}$"
+        default=None, max_length=47, pattern=REPO_SLUG_PATTERN
     )
 
 
@@ -76,6 +82,7 @@ class ProjectOut(BaseModel):
     ref: str
     name: str
     hypothesis: str
+    customer: str = ""
     form: str
     stage: str
     status: str
