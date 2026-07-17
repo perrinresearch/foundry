@@ -241,29 +241,37 @@ function renderProjects() {
 
   const groupBy = groupSelect.value;
   if (groupBy === "none") {
-    main.appendChild(renderProjectGrid(state.projects));
+    main.appendChild(renderProjectGrid(state.projects, false));
     return;
   }
 
   for (const group of projectGroups(groupBy)) {
     const projects = state.projects.filter((p) => (p[groupBy] || group.fallback) === group.id);
-    if (!projects.length) continue;
     const section = el("section", "project-group");
+    if (!projects.length) section.classList.add("is-empty");
+    section.dataset.groupValue = group.id;
     section.appendChild(el("h3", "project-group-title mono", group.label));
-    section.appendChild(renderProjectGrid(projects));
+    const grid = renderProjectGrid(projects, true);
+    if (!projects.length) {
+      grid.appendChild(el("div", "empty-hint mono", `Drop here to set ${group.label}`));
+    }
+    section.appendChild(grid);
+    attachGroupDropTarget(section, groupBy, group.id, group.fallback);
     main.appendChild(section);
   }
 }
 
-function renderProjectGrid(projects) {
+function renderProjectGrid(projects, draggable) {
   const grid = el("div", "project-grid");
   for (const p of [...projects].sort((a, b) => a.ref.localeCompare(b.ref))) {
-    grid.appendChild(renderProjectCard(p));
+    grid.appendChild(renderProjectCard(p, draggable));
   }
   return grid;
 }
 
-function renderProjectCard(p) {
+let suppressNextCardClick = false;
+
+function renderProjectCard(p, draggable = false) {
   const card = el("div", "project-card");
   card.innerHTML = `
     <div class="ref mono">${p.ref}</div>
@@ -273,8 +281,70 @@ function renderProjectCard(p) {
     ${p.customer ? `<div class="project-submeta mono">customer: ${escapeHtml(p.customer)}</div>` : ""}
     ${p.repo_slug ? `<div class="project-submeta mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
   `;
-  card.onclick = () => loadProject(p.id);
+  card.onclick = () => {
+    if (suppressNextCardClick) {
+      suppressNextCardClick = false;
+      return;
+    }
+    loadProject(p.id);
+  };
+  if (draggable) {
+    card.draggable = true;
+    card.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", String(p.id));
+      e.dataTransfer.effectAllowed = "move";
+      card.classList.add("dragging");
+      document.body.classList.add("projects-dragging");
+      suppressNextCardClick = true;
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      document.body.classList.remove("projects-dragging");
+      document.querySelectorAll(".project-group.drag-over").forEach((s) => s.classList.remove("drag-over"));
+      // Keep suppress through the click that browsers may fire after dragend.
+      setTimeout(() => {
+        suppressNextCardClick = false;
+      }, 100);
+    });
+  }
   return card;
+}
+
+function attachGroupDropTarget(section, groupBy, value, fallback) {
+  section.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    section.classList.add("drag-over");
+  });
+  section.addEventListener("dragleave", (e) => {
+    if (section.contains(e.relatedTarget)) return;
+    section.classList.remove("drag-over");
+  });
+  section.addEventListener("drop", (e) => {
+    e.preventDefault();
+    section.classList.remove("drag-over");
+    document.body.classList.remove("projects-dragging");
+    const id = Number(e.dataTransfer.getData("text/plain"));
+    if (!id) return;
+    const project = state.projects.find((p) => Number(p.id) === id);
+    if (!project) return;
+    const current = project[groupBy] || fallback;
+    if (current === value) return;
+    updateProjectGroup(id, groupBy, value);
+  });
+}
+
+async function updateProjectGroup(id, field, value) {
+  try {
+    await api(`/api/projects/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ [field]: value }),
+    });
+    await loadProjects();
+  } catch (err) {
+    alert(err.message);
+    render();
+  }
 }
 
 function projectGroups(groupBy) {

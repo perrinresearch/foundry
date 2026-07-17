@@ -272,9 +272,24 @@ textarea { min-height: 5rem; resize: vertical; }
 }
 .project-group {
   margin-top: 1.75rem;
+  border-radius: var(--radius-lg);
+  padding: 0.5rem;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  border: 1px solid transparent;
 }
 .project-group:first-of-type {
   margin-top: 1rem;
+}
+.project-group.is-empty {
+  display: none;
+}
+body.projects-dragging .project-group.is-empty {
+  display: block;
+}
+.project-group.drag-over {
+  border-color: var(--color-ember);
+  background: color-mix(in srgb, var(--color-ember) 8%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ember) 35%, transparent);
 }
 .project-group-title {
   margin: 0 0 0.75rem;
@@ -283,13 +298,30 @@ textarea { min-height: 5rem; resize: vertical; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+.project-group .empty-hint {
+  grid-column: 1 / -1;
+  padding: 1.25rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  text-align: center;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
 .project-card {
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 1.25rem;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s, transform 0.15s, opacity 0.15s;
+}
+.project-card[draggable="true"] {
+  cursor: grab;
+}
+.project-card.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
 }
 .project-card:hover { border-color: var(--color-ember-deep); transform: translateY(-2px); }
 .project-card .ref { color: var(--color-ember); font-size: 0.75rem; letter-spacing: 0.1em; }
