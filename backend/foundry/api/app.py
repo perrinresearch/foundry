@@ -253,7 +253,8 @@ def list_projects(
     status: str | None = "active",
 ):
     q = db.query(Project)
-    if status:
+    # Default active-only; pass status=all (or empty) to include archived.
+    if status and status != "all":
         q = q.filter(Project.status == status)
     return [project_out(p, db) for p in q.order_by(Project.ref).all()]
 

@@ -41,6 +41,7 @@ const PROJECT_PRIORITIES = [
 
 const REPO_SLUG_RE = /^[a-z][a-z0-9-]{1,46}$/;
 const GROUP_BY_KEY = "foundry_group_by";
+const STATUS_FILTER_KEY = "foundry_status_filter";
 
 let state = {
   view: "projects",
@@ -153,8 +154,15 @@ function labelFor(items, id) {
   return items.find((item) => item.id === id)?.label || id;
 }
 
+function projectStatusFilter() {
+  const value = localStorage.getItem(STATUS_FILTER_KEY) || "active";
+  return ["active", "archived", "all"].includes(value) ? value : "active";
+}
+
 async function loadProjects() {
-  state.projects = await api("/api/projects");
+  const status = projectStatusFilter();
+  const qs = status === "active" ? "" : `?status=${encodeURIComponent(status)}`;
+  state.projects = await api(`/api/projects${qs}`);
   state.selectedProject = null;
   render();
 }
@@ -205,6 +213,24 @@ function renderProjects() {
   main.innerHTML = "";
   const toolbar = el("div", "toolbar");
   toolbar.innerHTML = `<p class="overline">Pipeline</p>`;
+
+  const statusWrap = el("label", "group-by-control mono");
+  statusWrap.setAttribute("for", "status-filter-select");
+  statusWrap.textContent = "Show";
+  const statusSelect = document.createElement("select");
+  statusSelect.id = "status-filter-select";
+  statusSelect.innerHTML = `
+    <option value="active">Active</option>
+    <option value="archived">Archived</option>
+    <option value="all">All</option>
+  `;
+  statusSelect.value = projectStatusFilter();
+  statusSelect.onchange = () => {
+    localStorage.setItem(STATUS_FILTER_KEY, statusSelect.value);
+    loadProjects();
+  };
+  statusWrap.appendChild(statusSelect);
+  toolbar.appendChild(statusWrap);
 
   const groupWrap = el("label", "group-by-control mono");
   groupWrap.setAttribute("for", "group-by-select");
