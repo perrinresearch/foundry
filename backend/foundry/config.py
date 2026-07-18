@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     token_expire_hours: int = 72
     listen_host: str = "127.0.0.1"
     listen_port: int = 8411
+    eval_backend_path: str = ""
     site_deploy_script: Path = Path("/home/bsperrinjr/dev.perrinresearch.com/site/scripts/deploy.sh")
     site_portfolio_file: Path = Path(
         "/home/bsperrinjr/dev.perrinresearch.com/site/src/data/portfolio.ts"

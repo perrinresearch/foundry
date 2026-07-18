@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+import sys
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -72,6 +73,15 @@ WEB_DIR = Path(__file__).resolve().parent.parent.parent.parent / "web"
 
 app = FastAPI(title="Perrin Research Foundry", version="0.1.0")
 
+eval_app = None
+eval_on_startup = None
+if settings.eval_backend_path:
+    eval_backend = str(Path(settings.eval_backend_path).expanduser().resolve())
+    if eval_backend not in sys.path:
+        sys.path.insert(0, eval_backend)
+    from foundry_eval.api.app import app as eval_app
+    from foundry_eval.api.app import on_startup as eval_on_startup
+
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -97,6 +107,8 @@ def on_startup():
         seed_database(db)
     finally:
         db.close()
+    if eval_on_startup:
+        eval_on_startup()
 
 
 def project_out(project: Project, db: Session) -> ProjectOut:
@@ -561,6 +573,9 @@ def delete_prompt(
 
 
 # --- Static web UI ---
+
+if eval_app:
+    app.mount("/eval", eval_app, name="foundry-eval")
 
 if WEB_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
