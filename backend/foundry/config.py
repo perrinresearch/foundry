@@ -8,7 +8,10 @@ class Settings(BaseSettings):
 
     secret_key: str = "change-me-in-production"
     database_url: str = ""
-    cors_origins: str = "http://localhost:5173,http://localhost:8000,https://foundry.perrinresearch.com"
+    cors_origins: str = (
+        "http://localhost:5173,http://localhost:8000,"
+        "https://dev.perrinresearch.com,https://foundry.perrinresearch.com"
+    )
     token_expire_hours: int = 72
     listen_host: str = "127.0.0.1"
     listen_port: int = 8411
