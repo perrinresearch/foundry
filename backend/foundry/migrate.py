@@ -161,3 +161,63 @@ def migrate_project_priority(engine: Engine) -> None:
                 "ALTER TABLE projects ADD COLUMN priority VARCHAR(32) NOT NULL DEFAULT 'normal'"
             )
         )
+
+
+def migrate_external_idempotency_keys(engine: Engine) -> None:
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    for table in ("tasks", "agent_prompts"):
+        if table not in tables:
+            continue
+        cols = {c["name"] for c in inspect(engine).get_columns(table)}
+        with engine.begin() as conn:
+            if "external_key" not in cols:
+                conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN external_key VARCHAR(255)")
+                )
+            conn.execute(
+                text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{table}_external_key "
+                    f"ON {table} (external_key)"
+                )
+            )
+
+
+def migrate_agent_execution_fields(engine: Engine) -> None:
+    insp = inspect(engine)
+    if "agent_prompts" not in insp.get_table_names():
+        return
+    columns = {c["name"] for c in insp.get_columns("agent_prompts")}
+    additions = {
+        "result_json": "TEXT NOT NULL DEFAULT '{}'",
+        "error": "TEXT NOT NULL DEFAULT ''",
+        "worker_id": "VARCHAR(255) NOT NULL DEFAULT ''",
+        "lease_token": "VARCHAR(128) NOT NULL DEFAULT ''",
+        "lease_expires_at": "DATETIME",
+        "heartbeat_at": "DATETIME",
+        "attempts": "INTEGER NOT NULL DEFAULT 0",
+        "runtime_seconds": "FLOAT",
+        "cost_usd": "FLOAT",
+        "artifact_refs_json": "TEXT NOT NULL DEFAULT '[]'",
+    }
+    with engine.begin() as conn:
+        for name, ddl in additions.items():
+            if name not in columns:
+                conn.execute(
+                    text(f"ALTER TABLE agent_prompts ADD COLUMN {name} {ddl}")
+                )
+
+
+def migrate_workflow_fields(engine: Engine) -> None:
+    insp = inspect(engine)
+    if "gate_reviews" not in insp.get_table_names():
+        return
+    columns = {c["name"] for c in insp.get_columns("gate_reviews")}
+    if "wip_override" not in columns:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE gate_reviews ADD COLUMN "
+                    "wip_override BOOLEAN NOT NULL DEFAULT 0"
+                )
+            )

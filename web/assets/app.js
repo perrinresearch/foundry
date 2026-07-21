@@ -49,6 +49,7 @@ let state = {
   selectedProject: null,
   tasks: [],
   prompts: [],
+  workflow: null,
   users: [],
   me: null,
 };
@@ -169,8 +170,11 @@ async function loadProjects() {
 
 async function loadProject(id) {
   state.selectedProject = await api(`/api/projects/${id}`);
-  state.tasks = await api(`/api/projects/${id}/tasks`);
-  state.prompts = await api(`/api/agent-prompts?project_id=${id}`);
+  [state.tasks, state.prompts, state.workflow] = await Promise.all([
+    api(`/api/projects/${id}/tasks`),
+    api(`/api/agent-prompts?project_id=${id}`),
+    api(`/api/projects/${id}/workflow`),
+  ]);
   render();
 }
 
@@ -262,7 +266,7 @@ function renderProjects() {
   toolbar.appendChild(publishBtn);
   main.appendChild(toolbar);
   main.appendChild(
-    el("p", "field-hint toolbar-hint", "Syncs active portfolio projects and deploys to the public site.")
+    el("p", "field-hint toolbar-hint", "Publishes only active, public projects with a verified release.")
   );
 
   const groupBy = groupSelect.value;
@@ -304,6 +308,7 @@ function renderProjectCard(p, draggable = false) {
     <h3>${escapeHtml(p.name)}</h3>
     <div class="stage">${p.stage} · ${p.status} · ${p.visibility || "public"} · ${p.form}</div>
     <div class="project-submeta mono">priority: ${escapeHtml(p.priority || "normal")}</div>
+    <div class="project-submeta mono">evidence: ${Math.round((p.evidence_coverage || 0) * 100)}% · ${(p.gate_blockers || []).length} blocker(s)</div>
     ${p.customer ? `<div class="project-submeta mono">customer: ${escapeHtml(p.customer)}</div>` : ""}
     ${p.repo_slug ? `<div class="project-submeta mono">repo: ${escapeHtml(p.repo_slug)}</div>` : ""}
   `;
@@ -435,6 +440,7 @@ function renderProjectDetail() {
   };
   toolbar.appendChild(addTask);
   main.appendChild(toolbar);
+  main.appendChild(renderWorkflowPanel(p, state.workflow));
 
   const board = el("div", "kanban");
   for (const col of KANBAN_COLS) {
@@ -498,6 +504,179 @@ function renderProjectDetail() {
     board.appendChild(column);
   }
   main.appendChild(board);
+}
+
+function renderWorkflowPanel(project, workflow) {
+  const panel = el("section", "panel");
+  if (!workflow) {
+    panel.textContent = "Workflow unavailable.";
+    return panel;
+  }
+  const blockers = workflow.blockers || [];
+  panel.innerHTML = `
+    <p class="overline">Evidence gate · policy ${escapeHtml(workflow.policy_version)}</p>
+    <h3>${workflow.readiness.can_advance ? "Ready for review" : "Gate blocked"}</h3>
+    ${
+      blockers.length
+        ? `<ul>${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+        : "<p>Required evidence is present. A human gate review is still required.</p>"
+    }
+    <p class="field-hint">${workflow.experiments.length} experiment(s) · ${workflow.artifacts.length} artifact(s) · ${workflow.reviews.length} review(s)</p>
+    ${
+      workflow.reviews.length
+        ? `<ol class="workflow-timeline">${workflow.reviews
+            .slice()
+            .reverse()
+            .slice(0, 5)
+            .map(
+              (review) =>
+                `<li><span class="mono">${escapeHtml(review.outcome)}</span> ${escapeHtml(
+                  review.from_stage
+                )} → ${escapeHtml(review.target_stage)} · ${escapeHtml(
+                  review.rationale
+                )}</li>`
+            )
+            .join("")}</ol>`
+        : ""
+    }
+  `;
+  const actions = el("div", "toolbar");
+  const dossier = el("button", "btn btn-sm secondary", "Edit dossier");
+  dossier.onclick = () => editDossier(project, workflow.dossier);
+  actions.appendChild(dossier);
+  const experiment = el("button", "btn btn-sm secondary", "+ Experiment");
+  experiment.onclick = () => addExperiment(project);
+  actions.appendChild(experiment);
+  const artifact = el("button", "btn btn-sm secondary", "+ Artifact");
+  artifact.onclick = () => addArtifact(project, workflow.experiments);
+  actions.appendChild(artifact);
+  const campaign = el("button", "btn btn-sm secondary", "Start evaluation");
+  campaign.onclick = () => startEvaluationCampaign(project, workflow.artifacts);
+  actions.appendChild(campaign);
+  const review = el("button", "btn btn-sm", "Gate review");
+  review.onclick = () => submitGateReview(project);
+  actions.appendChild(review);
+  panel.appendChild(actions);
+  return panel;
+}
+
+async function editDossier(project, current) {
+  const field = (label, value = "") => prompt(label, value || "");
+  const observable_problem = field("Observable problem", current?.observable_problem);
+  if (observable_problem === null) return;
+  const expected_value = field("Expected value", current?.expected_value);
+  const falsification_condition = field(
+    "Falsification condition",
+    current?.falsification_condition
+  );
+  const domain = field("Research domain", current?.domain);
+  const initial_evidence = field("Initial evidence", current?.initial_evidence);
+  const minimum_testable_artifact = field(
+    "Minimum testable artifact",
+    current?.minimum_testable_artifact
+  );
+  const success_criteria = field("Success criteria", current?.success_criteria);
+  await api(`/api/projects/${project.id}/dossier`, {
+    method: "PUT",
+    body: JSON.stringify({
+      observable_problem,
+      expected_value,
+      falsification_condition,
+      domain,
+      initial_evidence,
+      minimum_testable_artifact,
+      success_criteria,
+      decision_deadline: current?.decision_deadline || null,
+    }),
+  });
+  await loadProject(project.id);
+}
+
+async function addExperiment(project) {
+  const question = prompt("Experiment question", project.hypothesis || "");
+  if (!question) return;
+  const method = prompt("Method", "") || "";
+  const acceptance_criteria = prompt("Acceptance criteria", "") || "";
+  await api(`/api/projects/${project.id}/experiments`, {
+    method: "POST",
+    body: JSON.stringify({ question, method, acceptance_criteria, status: "planned" }),
+  });
+  await loadProject(project.id);
+}
+
+async function addArtifact(project, experiments) {
+  const title = prompt("Artifact title");
+  if (!title) return;
+  const uri = prompt("Immutable URL, document reference, or repository path");
+  if (!uri) return;
+  const version = prompt("Version or commit SHA", "") || "";
+  const experiment_id = experiments.length ? experiments[experiments.length - 1].id : null;
+  await api(`/api/projects/${project.id}/artifacts`, {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      uri,
+      version,
+      experiment_id,
+      kind: project.form === "static" ? "document" : "application",
+      immutable: true,
+      checks_status: "passed",
+    }),
+  });
+  await loadProject(project.id);
+}
+
+async function startEvaluationCampaign(project, artifacts) {
+  if (!artifacts.length) return alert("Register an artifact first.");
+  const name = prompt("Campaign name", `${project.ref} evaluation`);
+  if (!name) return;
+  const sample_target = Number(prompt("Accepted feedback target", "3") || "3");
+  await api(`/api/projects/${project.id}/evaluation-campaigns`, {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      claim: project.hypothesis,
+      artifact_refs: artifacts.map((artifact) => artifact.uri),
+      audience: project.customer || "",
+      sample_target,
+      success_threshold: 0.75,
+      status: "open",
+    }),
+  });
+  alert("Evaluation campaign opened in Foundry Eval.");
+}
+
+async function submitGateReview(project) {
+  const outcome = (prompt("Outcome: advance, iterate, hold, or retire", "advance") || "")
+    .trim()
+    .toLowerCase();
+  if (!outcome) return;
+  const rationale = prompt("Decision rationale");
+  if (!rationale) return;
+  const refs = (prompt("Evidence references (comma-separated)", "") || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const next_action =
+    outcome === "iterate" || outcome === "hold"
+      ? prompt("Required next action") || ""
+      : "";
+  try {
+    await api(`/api/projects/${project.id}/gate-reviews`, {
+      method: "POST",
+      body: JSON.stringify({
+        outcome,
+        rationale,
+        evidence_refs: refs,
+        next_action,
+        unresolved_risks: prompt("Unresolved risks", "") || "",
+        policy_version: "1.0",
+      }),
+    });
+    await loadProject(project.id);
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 function renderAgents() {
@@ -588,8 +767,7 @@ function showNewProjectForm() {
       <option value="interactive">Interactive (application)</option>
       <option value="static">Static (writing)</option>
     </select>
-    <label for="np-stage">Pipeline stage</label>
-    <select id="np-stage"></select>
+    <p class="field-hint">New projects enter the Idea stage and advance through evidence gates.</p>
     <label for="np-priority">Priority</label>
     <select id="np-priority"></select>
     <label for="np-visibility">Visibility</label>
@@ -605,14 +783,6 @@ function showNewProjectForm() {
     <p id="np-error" class="error hidden"></p>
   `;
 
-  const stageSel = panel.querySelector("#np-stage");
-  for (const s of PROJECT_STAGES) {
-    const o = document.createElement("option");
-    o.value = s.id;
-    o.textContent = s.label;
-    if (s.id === "idea") o.selected = true;
-    stageSel.appendChild(o);
-  }
   const prioritySel = panel.querySelector("#np-priority");
   for (const p of PROJECT_PRIORITIES) {
     const o = document.createElement("option");
@@ -664,7 +834,7 @@ function showNewProjectForm() {
           hypothesis,
           customer,
           form: panel.querySelector("#np-form").value,
-          stage: stageSel.value,
+          stage: "idea",
           priority: prioritySel.value,
           visibility: visSel.value,
           repo_slug: repoSlug,
@@ -706,9 +876,7 @@ function showProjectEditor(project) {
     <textarea id="pj-hyp" placeholder="What are you testing?"></textarea>
     <label for="pj-customer">Customer / requestor</label>
     <input id="pj-customer" type="text" placeholder="Who asked for this / who it is for" autocomplete="organization" />
-    <label for="pj-stage">Pipeline stage</label>
-    <select id="pj-stage"></select>
-    <p class="field-hint">Name, hypothesis, and stage sync to the public site when you publish from the Projects view.</p>
+    <p class="field-hint">Pipeline stage is controlled by evidence gate reviews.</p>
     <label for="pj-priority">Priority</label>
     <select id="pj-priority"></select>
     <label for="pj-visibility">Visibility</label>
@@ -732,14 +900,6 @@ function showProjectEditor(project) {
   panel.querySelector("#pj-customer").value = project.customer || "";
   panel.querySelector("#pj-repo").value = project.repo_slug || "";
 
-  const stageSel = panel.querySelector("#pj-stage");
-  for (const s of PROJECT_STAGES) {
-    const o = document.createElement("option");
-    o.value = s.id;
-    o.textContent = s.label;
-    if (s.id === project.stage) o.selected = true;
-    stageSel.appendChild(o);
-  }
   const statusSel = panel.querySelector("#pj-status");
   for (const s of PROJECT_STATUSES) {
     const o = document.createElement("option");
@@ -789,7 +949,6 @@ function showProjectEditor(project) {
           name,
           hypothesis: panel.querySelector("#pj-hyp").value.trim(),
           customer: panel.querySelector("#pj-customer").value.trim(),
-          stage: stageSel.value,
           status: statusSel.value,
           priority: prioritySel.value,
           visibility: visSel.value,

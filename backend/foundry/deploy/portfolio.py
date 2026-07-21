@@ -107,7 +107,8 @@ def _should_publish(project: Project) -> bool:
     return (
         project.status == "active"
         and visibility == "public"
-        and project.stage in PROJECT_STAGES
+        and project.stage == "shipped"
+        and any(release.status in ("approved", "released") for release in project.releases)
     )
 
 

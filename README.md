@@ -28,6 +28,20 @@ chmod +x scripts/run.sh
 
 Open http://localhost:8000
 
+## Evidence-gated workflow
+
+Projects enter at `idea`; direct stage edits are rejected. Complete the project
+dossier, experiments, immutable artifacts, Eval campaigns, and human gate
+reviews to advance through `prototype`, `evaluation`, and `shipped`.
+
+- Operating contract: [docs/operating-model.md](docs/operating-model.md)
+- Two-form pilot: [docs/pilot-runbook.md](docs/pilot-runbook.md)
+- Agent prompts support atomic claim/lease, heartbeat, retries, idempotent
+  completion, runtime/cost, and artifact provenance.
+- GitHub webhooks register commits, pull requests, CI checks, and deployment
+  previews as project artifacts.
+- Public portfolio publication requires a verified release, not only a stage.
+
 **If `./scripts/run.sh` fails with "uvicorn: No such file or directory":** your `venv/` is incomplete (common when `python3-venv` is not installed). Either:
 
 ```bash
@@ -98,6 +112,9 @@ For local dev against emulator: `http://10.0.2.2:8000`
 | `FOUNDRY_SITE_DEPLOY_SCRIPT` | `.../dev.perrinresearch.com/site/scripts/deploy.sh` |
 | `FOUNDRY_SITE_PUBLIC_URL` | `https://dev.perrinresearch.com` |
 | `FOUNDRY_SITE_PUBLIC_DIR` | `.../dev.perrinresearch.com/public` |
+| `FOUNDRY_EVAL_API_URL` / `FOUNDRY_EVAL_EMAIL` / `FOUNDRY_EVAL_PASSWORD` | Central Eval integration |
+| `FOUNDRY_GITHUB_TOKEN` / `FOUNDRY_GITHUB_ORG` | Repository provisioning |
+| `FOUNDRY_GITHUB_WEBHOOK_SECRET` | Signed GitHub event ingestion |
 
 ## Site deploy
 

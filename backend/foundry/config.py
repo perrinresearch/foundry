@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     site_public_dir: Path = Path("/home/bsperrinjr/dev.perrinresearch.com/public")
     site_public_url: str = "https://dev.perrinresearch.com"
     site_deploy_timeout_seconds: int = 300
+    eval_api_url: str = "https://foundry.perrinresearch.com/eval"
+    eval_email: str = ""
+    eval_password: str = ""
+    github_token: str = ""
+    github_org: str = "perrinresearch"
+    github_webhook_secret: str = ""
 
     @property
     def data_dir(self) -> Path:
