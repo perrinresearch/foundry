@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class TokenResponse(BaseModel):
@@ -48,9 +48,24 @@ class AdminUserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8)
     name: str | None = Field(default=None, min_length=1, max_length=255)
 
-# Local/GitHub folder name; blank = no local provision by project_sync
-REPO_SLUG_PATTERN = r"^$|^[a-z][a-z0-9-]{1,46}$"
+# GitHub repository names: ASCII alphanumerics, hyphens, underscores, periods.
+# Blank = no local provision by project_sync. Max 100 chars (GitHub limit).
+REPO_SLUG_PATTERN = r"^$|^[A-Za-z0-9._-]{1,100}$"
 
+
+def normalize_repo_slug(value: str | None) -> str | None:
+    if value is None:
+        return None
+    slug = value.strip()
+    if not slug:
+        return ""
+    if slug.startswith("-"):
+        raise ValueError("GitHub repo names cannot start with a hyphen")
+    if slug.lower().endswith(".git"):
+        raise ValueError("GitHub repo names cannot end with .git")
+    if slug in (".", ".."):
+        raise ValueError("GitHub repo names cannot be '.' or '..'")
+    return slug
 
 
 class ProjectCreate(BaseModel):
@@ -62,7 +77,12 @@ class ProjectCreate(BaseModel):
     stage: str = "idea"
     priority: str = "normal"
     visibility: str = "public"
-    repo_slug: str = Field(default="", max_length=47, pattern=REPO_SLUG_PATTERN)
+    repo_slug: str = Field(default="", max_length=100, pattern=REPO_SLUG_PATTERN)
+
+    @field_validator("repo_slug")
+    @classmethod
+    def validate_repo_slug(cls, value: str) -> str:
+        return normalize_repo_slug(value) or ""
 
 
 class ProjectUpdate(BaseModel):
@@ -75,8 +95,13 @@ class ProjectUpdate(BaseModel):
     priority: str | None = None
     visibility: str | None = None
     repo_slug: str | None = Field(
-        default=None, max_length=47, pattern=REPO_SLUG_PATTERN
+        default=None, max_length=100, pattern=REPO_SLUG_PATTERN
     )
+
+    @field_validator("repo_slug")
+    @classmethod
+    def validate_repo_slug(cls, value: str | None) -> str | None:
+        return normalize_repo_slug(value)
 
 
 class ProjectOut(BaseModel):

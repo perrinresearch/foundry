@@ -48,7 +48,7 @@ class Project(Base):
     visibility: Mapped[str] = mapped_column(String(32), default="public")
     priority: Mapped[str] = mapped_column(String(32), default="normal")
     # Optional GitHub/local folder name; empty = Foundry-only (no local provision)
-    repo_slug: Mapped[str] = mapped_column(String(47), default="")
+    repo_slug: Mapped[str] = mapped_column(String(100), default="")
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

@@ -39,7 +39,21 @@ const PROJECT_PRIORITIES = [
   { id: "low", label: "Low" },
 ];
 
-const REPO_SLUG_RE = /^[a-z][a-z0-9-]{1,46}$/;
+// GitHub repo names: alphanumerics, ., -, _; no leading hyphen; no trailing .git; ≤100 chars.
+const REPO_SLUG_RE = /^[A-Za-z0-9._-]{1,100}$/;
+
+function isValidRepoSlug(slug) {
+  if (!slug) return true;
+  if (slug.startsWith("-") || slug === "." || slug === "..") return false;
+  if (/\.git$/i.test(slug)) return false;
+  return REPO_SLUG_RE.test(slug);
+}
+
+const REPO_SLUG_HINT =
+  "GitHub repo name: letters, numbers, hyphens, underscores, and periods (e.g. perrinresearch.com). Blank = no GitHub.";
+
+const REPO_SLUG_ERROR =
+  "GitHub repo name must use only letters, numbers, hyphens, underscores, and periods (1–100 chars; cannot start with '-' or end with .git).";
 const GROUP_BY_KEY = "foundry_group_by";
 const STATUS_FILTER_KEY = "foundry_status_filter";
 
@@ -774,8 +788,8 @@ function showNewProjectForm() {
     <select id="np-visibility"></select>
     <p class="field-hint">Public projects appear on the site when you publish. Private stay in Foundry only.</p>
     <label for="np-repo">GitHub repo (optional)</label>
-    <input id="np-repo" type="text" placeholder="my-project-slug" autocomplete="off" />
-    <p class="field-hint">Lowercase slug for local WSL provision (e.g. restore79). Blank = no GitHub repo.</p>
+    <input id="np-repo" type="text" placeholder="perrinresearch.com" autocomplete="off" />
+    <p class="field-hint">${REPO_SLUG_HINT}</p>
     <div class="task-editor-buttons">
       <button type="button" class="btn" id="np-save">Create</button>
       <button type="button" class="btn btn-sm secondary" id="np-cancel">Cancel</button>
@@ -808,7 +822,7 @@ function showNewProjectForm() {
     const name = panel.querySelector("#np-name").value.trim();
     const hypothesis = panel.querySelector("#np-hyp").value.trim();
     const customer = panel.querySelector("#np-customer").value.trim();
-    const repoSlug = panel.querySelector("#np-repo").value.trim().toLowerCase();
+    const repoSlug = panel.querySelector("#np-repo").value.trim();
     if (!ref || !name) {
       errEl.textContent = "Ref and name are required.";
       errEl.classList.remove("hidden");
@@ -819,9 +833,8 @@ function showNewProjectForm() {
       errEl.classList.remove("hidden");
       return;
     }
-    if (repoSlug && !REPO_SLUG_RE.test(repoSlug)) {
-      errEl.textContent =
-        "GitHub repo slug must be lowercase, start with a letter, and use only letters, numbers, and hyphens (2–47 chars).";
+    if (!isValidRepoSlug(repoSlug)) {
+      errEl.textContent = REPO_SLUG_ERROR;
       errEl.classList.remove("hidden");
       return;
     }
@@ -883,8 +896,8 @@ function showProjectEditor(project) {
     <select id="pj-visibility"></select>
     <p class="field-hint">Private projects stay in Foundry and are removed from the public site on publish.</p>
     <label for="pj-repo">GitHub repo (optional)</label>
-    <input id="pj-repo" type="text" placeholder="my-project-slug" autocomplete="off" />
-    <p class="field-hint">Lowercase slug for local WSL provision; blank = no GitHub.</p>
+    <input id="pj-repo" type="text" placeholder="perrinresearch.com" autocomplete="off" />
+    <p class="field-hint">${REPO_SLUG_HINT}</p>
     <label for="pj-status">Project status</label>
     <select id="pj-status"></select>
     <p class="field-hint">Internal only — archived projects stay out of site sync.</p>
@@ -930,15 +943,14 @@ function showProjectEditor(project) {
     const errEl = panel.querySelector("#pj-error");
     errEl.classList.add("hidden");
     const name = panel.querySelector("#pj-name").value.trim();
-    const repoSlug = panel.querySelector("#pj-repo").value.trim().toLowerCase();
+    const repoSlug = panel.querySelector("#pj-repo").value.trim();
     if (!name) {
       errEl.textContent = "Name is required.";
       errEl.classList.remove("hidden");
       return;
     }
-    if (repoSlug && !REPO_SLUG_RE.test(repoSlug)) {
-      errEl.textContent =
-        "GitHub repo slug must be lowercase, start with a letter, and use only letters, numbers, and hyphens (2–47 chars).";
+    if (!isValidRepoSlug(repoSlug)) {
+      errEl.textContent = REPO_SLUG_ERROR;
       errEl.classList.remove("hidden");
       return;
     }
