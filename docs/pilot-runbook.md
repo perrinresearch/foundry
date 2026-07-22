@@ -25,3 +25,17 @@ For each pilot:
 The pilot is complete only when both forms have an auditable timeline from
 intake through a decision. Manual interventions are logged during the pilot;
 only repeated, deterministic handoffs become candidates for further automation.
+
+## Cursor execution pilot (bounded coding)
+
+For a single Waypoint coding prompt on WSL:
+
+1. Deploy Foundry with `FOUNDRY_REPOS_ROOT` set so claim payloads include
+   `repo_slug` / `repo_cwd` (workers also fall back to `project_repos.json`).
+2. From `~/perrinresearch/agents`, configure `.env` (`FOUNDRY_*`, `CURSOR_API_KEY`).
+3. Run `python -m src.pilot_waypoint` (or `--dry-run` to exercise claim/complete
+   without calling Cursor).
+4. Review the completed prompt and task (`testing`) in Foundry; do not auto-advance
+   project stage.
+5. Record operator minutes, diff acceptability, escaped defects, and Cursor cost
+   from `var/cursor_pilot_waypoint.json`.

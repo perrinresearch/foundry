@@ -401,6 +401,8 @@ class AgentPromptOut(BaseModel):
     updated_at: datetime
     task_title: str | None = None
     project_ref: str | None = None
+    repo_slug: str = ""
+    repo_cwd: str = ""
 
     model_config = {"from_attributes": True}
 

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     github_token: str = ""
     github_org: str = "perrinresearch"
     github_webhook_secret: str = ""
+    # Local checkouts root for Cursor/agent workers (WSL). Empty = unset.
+    repos_root: str = ""
 
     @property
     def data_dir(self) -> Path:

@@ -74,6 +74,17 @@ Required release checks:
 Shipping creates a release record. Public portfolio publication follows an
 approved release; setting a project stage alone is not publication approval.
 
+## Agent execution
+
+Foundry queues `AgentPrompt` work with claim leases. A WSL Cursor worker may
+claim a prompt, run a **local** Cursor SDK agent against
+`FOUNDRY_REPOS_ROOT/<repo_slug>` (or the claim `repo_cwd`), heartbeat the lease,
+and complete with notes, runtime, cost, and artifact refs (branch/commit).
+
+Cursor is a bounded code executor, not a stage decision-maker. Completing a
+prompt moves the task to `testing` for human review; it does not advance the
+project stage.
+
 ## Work-in-progress limits
 
 Initial limits are portfolio-wide and should be changed only in a documented

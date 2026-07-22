@@ -124,8 +124,38 @@ def test_capture_gate_creates_audited_first_experiment(client, session):
     assert len(workflow["experiments"]) == 1
 
 
+def test_agent_prompt_claim_includes_repo_cwd_when_repos_root_set(client, tmp_path, monkeypatch):
+    from foundry.config import settings
+
+    repo = tmp_path / "waypoint"
+    repo.mkdir()
+    monkeypatch.setattr(settings, "repos_root", str(tmp_path))
+
+    project = create_project(client)
+    client.patch(f"/api/projects/{project['id']}", json={"repo_slug": "waypoint"})
+    task = client.post(
+        f"/api/projects/{project['id']}/tasks", json={"title": "Execute"}
+    ).json()
+    client.post(
+        "/api/agent-prompts",
+        json={"task_id": task["id"], "title": "Run", "prompt_text": "Do work"},
+    )
+    claim = client.post(
+        "/api/agent-prompts/claim",
+        json={"worker_id": "worker-cwd", "lease_seconds": 120},
+    )
+    assert claim.status_code == 200
+    body = claim.json()
+    assert body["repo_slug"] == "waypoint"
+    assert body["repo_cwd"] == str(repo.resolve())
+
+
 def test_agent_prompt_claim_and_completion_are_idempotent(client):
     project = create_project(client)
+    client.patch(
+        f"/api/projects/{project['id']}",
+        json={"repo_slug": "waypoint"},
+    )
     task = client.post(
         f"/api/projects/{project['id']}/tasks", json={"title": "Execute"}
     ).json()
@@ -138,7 +168,11 @@ def test_agent_prompt_claim_and_completion_are_idempotent(client):
         json={"worker_id": "worker-1", "lease_seconds": 120},
     )
     assert claim.status_code == 200
-    lease = claim.json()["lease_token"]
+    body = claim.json()
+    assert body["repo_slug"] == "waypoint"
+    assert body["project_ref"] == "PR-900"
+    assert "repo_cwd" in body
+    lease = body["lease_token"]
     payload = {
         "worker_id": "worker-1",
         "lease_token": lease,

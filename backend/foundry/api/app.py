@@ -192,8 +192,15 @@ def project_out(project: Project, db: Session) -> ProjectOut:
 
 def prompt_out(prompt: AgentPrompt, db: Session) -> AgentPromptOut:
     task = prompt.task or db.get(Task, prompt.task_id)
-    project_ref = task.project.ref if task and task.project else None
+    project = task.project if task else None
+    project_ref = project.ref if project else None
     task_title = task.title if task else None
+    repo_slug = (getattr(project, "repo_slug", None) or "").strip() if project else ""
+    repo_cwd = ""
+    if repo_slug and settings.repos_root.strip():
+        candidate = Path(settings.repos_root).expanduser() / repo_slug
+        if candidate.is_dir():
+            repo_cwd = str(candidate.resolve())
     return AgentPromptOut(
         id=prompt.id,
         task_id=prompt.task_id,
@@ -217,6 +224,8 @@ def prompt_out(prompt: AgentPrompt, db: Session) -> AgentPromptOut:
         updated_at=prompt.updated_at,
         task_title=task_title,
         project_ref=project_ref,
+        repo_slug=repo_slug,
+        repo_cwd=repo_cwd,
     )
 
 
