@@ -575,69 +575,260 @@ function renderWorkflowPanel(project, workflow) {
 }
 
 async function editDossier(project, current) {
-  const field = (label, value = "") => prompt(label, value || "");
-  const observable_problem = field("Observable problem", current?.observable_problem);
-  if (observable_problem === null) return;
-  const expected_value = field("Expected value", current?.expected_value);
-  const falsification_condition = field(
-    "Falsification condition",
-    current?.falsification_condition
-  );
-  const domain = field("Research domain", current?.domain);
-  const initial_evidence = field("Initial evidence", current?.initial_evidence);
-  const minimum_testable_artifact = field(
-    "Minimum testable artifact",
-    current?.minimum_testable_artifact
-  );
-  const success_criteria = field("Success criteria", current?.success_criteria);
-  await api(`/api/projects/${project.id}/dossier`, {
-    method: "PUT",
-    body: JSON.stringify({
-      observable_problem,
-      expected_value,
-      falsification_condition,
-      domain,
-      initial_evidence,
-      minimum_testable_artifact,
-      success_criteria,
-      decision_deadline: current?.decision_deadline || null,
-    }),
+  closeWorkflowModals();
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "dossier-editor-overlay";
+  const c = current || {};
+  const deadlineValue = c.decision_deadline
+    ? String(c.decision_deadline).slice(0, 10)
+    : "";
+
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">Edit dossier · ${escapeHtml(project.ref)}</p>
+    <label for="do-problem">Observable problem</label>
+    <textarea id="do-problem" rows="3" placeholder="What is broken or costly today?"></textarea>
+    <label for="do-value">Expected value</label>
+    <textarea id="do-value" rows="2" placeholder="What improves if this works?"></textarea>
+    <label for="do-falsify">Falsification condition</label>
+    <textarea id="do-falsify" rows="2" placeholder="What would prove the claim wrong?"></textarea>
+    <label for="do-domain">Research domain</label>
+    <input id="do-domain" type="text" placeholder="e.g. AI/ML, Leadership" />
+    <label for="do-evidence">Initial evidence</label>
+    <textarea id="do-evidence" rows="2" placeholder="Existing signal, interviews, notes…"></textarea>
+    <label for="do-artifact">Minimum testable artifact</label>
+    <textarea id="do-artifact" rows="2" placeholder="Smallest thing that can be evaluated"></textarea>
+    <label for="do-success">Success criteria</label>
+    <textarea id="do-success" rows="2" placeholder="How will you know the gate is met?"></textarea>
+    <label for="do-deadline">Decision deadline</label>
+    <input id="do-deadline" type="date" />
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="do-save">Save dossier</button>
+      <button type="button" class="btn btn-sm secondary" id="do-cancel">Cancel</button>
+    </div>
+    <p id="do-error" class="error hidden"></p>
+  `;
+
+  panel.querySelector("#do-problem").value = c.observable_problem || "";
+  panel.querySelector("#do-value").value = c.expected_value || "";
+  panel.querySelector("#do-falsify").value = c.falsification_condition || "";
+  panel.querySelector("#do-domain").value = c.domain || "";
+  panel.querySelector("#do-evidence").value = c.initial_evidence || "";
+  panel.querySelector("#do-artifact").value = c.minimum_testable_artifact || "";
+  panel.querySelector("#do-success").value = c.success_criteria || "";
+  panel.querySelector("#do-deadline").value = deadlineValue;
+
+  panel.querySelector("#do-cancel").onclick = closeWorkflowModals;
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) closeWorkflowModals();
   });
-  await loadProject(project.id);
+  panel.querySelector("#do-save").onclick = async () => {
+    const errEl = panel.querySelector("#do-error");
+    errEl.classList.add("hidden");
+    const deadlineRaw = panel.querySelector("#do-deadline").value.trim();
+    try {
+      await api(`/api/projects/${project.id}/dossier`, {
+        method: "PUT",
+        body: JSON.stringify({
+          observable_problem: panel.querySelector("#do-problem").value.trim(),
+          expected_value: panel.querySelector("#do-value").value.trim(),
+          falsification_condition: panel.querySelector("#do-falsify").value.trim(),
+          domain: panel.querySelector("#do-domain").value.trim(),
+          initial_evidence: panel.querySelector("#do-evidence").value.trim(),
+          minimum_testable_artifact: panel.querySelector("#do-artifact").value.trim(),
+          success_criteria: panel.querySelector("#do-success").value.trim(),
+          decision_deadline: deadlineRaw ? `${deadlineRaw}T00:00:00Z` : null,
+        }),
+      });
+      closeWorkflowModals();
+      await loadProject(project.id);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
+  };
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#do-problem").focus();
 }
 
 async function addExperiment(project) {
-  const question = prompt("Experiment question", project.hypothesis || "");
-  if (!question) return;
-  const method = prompt("Method", "") || "";
-  const acceptance_criteria = prompt("Acceptance criteria", "") || "";
-  await api(`/api/projects/${project.id}/experiments`, {
-    method: "POST",
-    body: JSON.stringify({ question, method, acceptance_criteria, status: "planned" }),
+  closeWorkflowModals();
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "experiment-editor-overlay";
+
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">New experiment · ${escapeHtml(project.ref)}</p>
+    <label for="ex-question">Experiment question</label>
+    <textarea id="ex-question" rows="3" placeholder="What claim are you testing?"></textarea>
+    <label for="ex-method">Method</label>
+    <textarea id="ex-method" rows="3" placeholder="How will you test it?"></textarea>
+    <label for="ex-acceptance">Acceptance criteria</label>
+    <textarea id="ex-acceptance" rows="3" placeholder="What result counts as success or failure?"></textarea>
+    <label for="ex-status">Status</label>
+    <select id="ex-status">
+      <option value="planned" selected>Planned</option>
+      <option value="running">Running</option>
+      <option value="completed">Completed</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+    <label for="ex-end">End date</label>
+    <input id="ex-end" type="date" />
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="ex-save">Create experiment</button>
+      <button type="button" class="btn btn-sm secondary" id="ex-cancel">Cancel</button>
+    </div>
+    <p id="ex-error" class="error hidden"></p>
+  `;
+
+  panel.querySelector("#ex-question").value = project.hypothesis || "";
+
+  panel.querySelector("#ex-cancel").onclick = closeWorkflowModals;
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) closeWorkflowModals();
   });
-  await loadProject(project.id);
+  panel.querySelector("#ex-save").onclick = async () => {
+    const errEl = panel.querySelector("#ex-error");
+    errEl.classList.add("hidden");
+    const question = panel.querySelector("#ex-question").value.trim();
+    if (!question) {
+      errEl.textContent = "Experiment question is required.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    const endRaw = panel.querySelector("#ex-end").value.trim();
+    try {
+      await api(`/api/projects/${project.id}/experiments`, {
+        method: "POST",
+        body: JSON.stringify({
+          question,
+          method: panel.querySelector("#ex-method").value.trim(),
+          acceptance_criteria: panel.querySelector("#ex-acceptance").value.trim(),
+          status: panel.querySelector("#ex-status").value,
+          end_date: endRaw ? `${endRaw}T00:00:00Z` : null,
+        }),
+      });
+      closeWorkflowModals();
+      await loadProject(project.id);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
+  };
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#ex-question").focus();
 }
 
 async function addArtifact(project, experiments) {
-  const title = prompt("Artifact title");
-  if (!title) return;
-  const uri = prompt("Immutable URL, document reference, or repository path");
-  if (!uri) return;
-  const version = prompt("Version or commit SHA", "") || "";
-  const experiment_id = experiments.length ? experiments[experiments.length - 1].id : null;
-  await api(`/api/projects/${project.id}/artifacts`, {
-    method: "POST",
-    body: JSON.stringify({
-      title,
-      uri,
-      version,
-      experiment_id,
-      kind: project.form === "static" ? "document" : "application",
-      immutable: true,
-      checks_status: "passed",
-    }),
+  closeWorkflowModals();
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "artifact-editor-overlay";
+  const defaultKind = project.form === "static" ? "document" : "application";
+  const experimentOptions = [
+    `<option value="">None</option>`,
+    ...(experiments || []).map(
+      (exp) =>
+        `<option value="${exp.id}">#${exp.id} · ${escapeHtml(
+          (exp.question || "").slice(0, 80)
+        )}</option>`
+    ),
+  ].join("");
+
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">New artifact · ${escapeHtml(project.ref)}</p>
+    <label for="ar-title">Title</label>
+    <input id="ar-title" type="text" placeholder="Artifact name" />
+    <label for="ar-uri">Immutable URI</label>
+    <textarea id="ar-uri" rows="2" placeholder="URL, document reference, or repository path"></textarea>
+    <label for="ar-version">Version</label>
+    <input id="ar-version" type="text" placeholder="Version label or tag" />
+    <label for="ar-commit">Commit SHA</label>
+    <input id="ar-commit" type="text" placeholder="Optional git commit" class="mono" />
+    <label for="ar-kind">Kind</label>
+    <select id="ar-kind">
+      <option value="application">Application</option>
+      <option value="document">Document</option>
+      <option value="dataset">Dataset</option>
+      <option value="other">Other</option>
+    </select>
+    <label for="ar-experiment">Linked experiment</label>
+    <select id="ar-experiment">${experimentOptions}</select>
+    <label for="ar-checks">Checks status</label>
+    <select id="ar-checks">
+      <option value="pending">Pending</option>
+      <option value="passed" selected>Passed</option>
+      <option value="failed">Failed</option>
+      <option value="skipped">Skipped</option>
+    </select>
+    <label class="check" style="display:flex;align-items:center;gap:0.5rem;text-transform:none;letter-spacing:0;margin-top:0.75rem">
+      <input id="ar-immutable" type="checkbox" checked style="width:auto;margin:0" />
+      Immutable reference
+    </label>
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="ar-save">Create artifact</button>
+      <button type="button" class="btn btn-sm secondary" id="ar-cancel">Cancel</button>
+    </div>
+    <p id="ar-error" class="error hidden"></p>
+  `;
+
+  panel.querySelector("#ar-kind").value = defaultKind;
+  if (experiments?.length) {
+    panel.querySelector("#ar-experiment").value = String(
+      experiments[experiments.length - 1].id
+    );
+  }
+
+  panel.querySelector("#ar-cancel").onclick = closeWorkflowModals;
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) closeWorkflowModals();
   });
-  await loadProject(project.id);
+  panel.querySelector("#ar-save").onclick = async () => {
+    const errEl = panel.querySelector("#ar-error");
+    errEl.classList.add("hidden");
+    const title = panel.querySelector("#ar-title").value.trim();
+    const uri = panel.querySelector("#ar-uri").value.trim();
+    if (!title || !uri) {
+      errEl.textContent = "Title and immutable URI are required.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    const experimentRaw = panel.querySelector("#ar-experiment").value;
+    try {
+      await api(`/api/projects/${project.id}/artifacts`, {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          uri,
+          version: panel.querySelector("#ar-version").value.trim(),
+          commit_sha: panel.querySelector("#ar-commit").value.trim(),
+          kind: panel.querySelector("#ar-kind").value,
+          experiment_id: experimentRaw ? Number(experimentRaw) : null,
+          checks_status: panel.querySelector("#ar-checks").value,
+          immutable: panel.querySelector("#ar-immutable").checked,
+        }),
+      });
+      closeWorkflowModals();
+      await loadProject(project.id);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
+  };
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#ar-title").focus();
+}
+
+function closeWorkflowModals() {
+  document.getElementById("dossier-editor-overlay")?.remove();
+  document.getElementById("experiment-editor-overlay")?.remove();
+  document.getElementById("artifact-editor-overlay")?.remove();
 }
 
 async function startEvaluationCampaign(project, artifacts) {
