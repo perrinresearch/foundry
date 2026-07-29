@@ -198,9 +198,10 @@ def prompt_out(prompt: AgentPrompt, db: Session) -> AgentPromptOut:
     repo_slug = (getattr(project, "repo_slug", None) or "").strip() if project else ""
     repo_cwd = ""
     if repo_slug and settings.repos_root.strip():
+        # Emit a path hint even when the API host has no checkout (e.g. VPS).
+        # Workers validate the directory exists on their machine.
         candidate = Path(settings.repos_root).expanduser() / repo_slug
-        if candidate.is_dir():
-            repo_cwd = str(candidate.resolve())
+        repo_cwd = str(candidate.resolve() if candidate.is_dir() else candidate)
     return AgentPromptOut(
         id=prompt.id,
         task_id=prompt.task_id,

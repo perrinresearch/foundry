@@ -150,6 +150,32 @@ def test_agent_prompt_claim_includes_repo_cwd_when_repos_root_set(client, tmp_pa
     assert body["repo_cwd"] == str(repo.resolve())
 
 
+def test_agent_prompt_claim_emits_repo_cwd_hint_without_local_checkout(client, tmp_path, monkeypatch):
+    """VPS may set FOUNDRY_REPOS_ROOT to a WSL path that does not exist on the API host."""
+    from foundry.config import settings
+
+    root = tmp_path / "missing-repos"
+    monkeypatch.setattr(settings, "repos_root", str(root))
+
+    project = create_project(client)
+    client.patch(f"/api/projects/{project['id']}", json={"repo_slug": "waypoint"})
+    task = client.post(
+        f"/api/projects/{project['id']}/tasks", json={"title": "Execute"}
+    ).json()
+    client.post(
+        "/api/agent-prompts",
+        json={"task_id": task["id"], "title": "Run", "prompt_text": "Do work"},
+    )
+    claim = client.post(
+        "/api/agent-prompts/claim",
+        json={"worker_id": "worker-hint", "lease_seconds": 120},
+    )
+    assert claim.status_code == 200
+    body = claim.json()
+    assert body["repo_slug"] == "waypoint"
+    assert body["repo_cwd"] == str(root / "waypoint")
+
+
 def test_agent_prompt_claim_and_completion_are_idempotent(client):
     project = create_project(client)
     client.patch(

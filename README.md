@@ -115,6 +115,9 @@ For local dev against emulator: `http://10.0.2.2:8000`
 | `FOUNDRY_EVAL_API_URL` / `FOUNDRY_EVAL_EMAIL` / `FOUNDRY_EVAL_PASSWORD` | Central Eval integration |
 | `FOUNDRY_GITHUB_TOKEN` / `FOUNDRY_GITHUB_ORG` | Repository provisioning |
 | `FOUNDRY_GITHUB_WEBHOOK_SECRET` | Signed GitHub event ingestion |
+| `FOUNDRY_REPOS_ROOT` | Checkouts root for agent-prompt `repo_cwd` hints (e.g. `/home/scott/perrinresearch/repos`) |
+
+On the VPS, set `FOUNDRY_REPOS_ROOT` in `backend/.env` (or the Passenger env) so claim payloads include `repo_slug` and `repo_cwd`. The directory need not exist on the VPS; WSL Cursor workers resolve and validate the path locally (and fall back to `agents/config/project_repos.json`).
 
 ## Site deploy
 
@@ -132,6 +135,9 @@ On the VPS, from the Foundry checkout:
 cd ~/foundry   # or wherever the app lives
 git pull origin main
 chmod +x scripts/deploy.sh
+# Ensure claim payloads include repo_slug / repo_cwd for WSL Cursor workers:
+grep -q '^FOUNDRY_REPOS_ROOT=' backend/.env 2>/dev/null \
+  || echo 'FOUNDRY_REPOS_ROOT=/home/scott/perrinresearch/repos' >> backend/.env
 ./scripts/deploy.sh
 ```
 
