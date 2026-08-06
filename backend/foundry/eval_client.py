@@ -48,6 +48,21 @@ class EvalClient:
             )
         return response.json()
 
+    def create_survey_link(
+        self, project_ref: str, campaign_id: int
+    ) -> dict[str, Any]:
+        response = self.client.post(
+            f"{self.base_url}/api/projects/{project_ref}/campaigns/"
+            f"{campaign_id}/survey-link",
+            headers=self._headers(),
+        )
+        if response.status_code >= 400:
+            raise EvalClientError(
+                f"Create Eval survey link failed: "
+                f"{response.status_code} {response.text}"
+            )
+        return response.json()
+
     def decision_packet(self, project_ref: str, campaign_id: int) -> dict[str, Any]:
         response = self.client.get(
             f"{self.base_url}/api/projects/{project_ref}/campaigns/"

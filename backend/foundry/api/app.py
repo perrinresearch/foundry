@@ -29,6 +29,11 @@ from foundry.auth import (
 from foundry.config import settings
 from foundry.database import Base, SessionLocal, engine, get_db
 from foundry.eval_client import EvalClient, EvalClientError
+from foundry.forms import (
+    capture_agent_prompt_text,
+    normalize_form,
+    required_release_checks,
+)
 from foundry.github_client import GitHubClient, GitHubClientError
 from foundry.migrate import (
     migrate_agent_prompts_to_tasks,
@@ -520,6 +525,15 @@ def _gate_blockers(db: Session, project: Project) -> list[str]:
             )
             if any(info.get("mean") is None for info in dimensions.values()):
                 blockers.append("Required rubric dimensions lack scored evidence")
+            if normalize_form(project.form) == "physical":
+                testability = packet.get("testability") or {}
+                if not testability:
+                    blockers.append("Evaluation decision packet lacks testability assessment")
+                elif testability.get("can_test") is False:
+                    blockers.append(
+                        "Artifact set cannot test the stated value claims "
+                        "(iterate on mockup package)"
+                    )
     return blockers
 
 
@@ -810,12 +824,15 @@ def create_gate_review(
                 AgentPrompt(
                     task_id=task.id,
                     title="Prepare first prototype experiment",
-                    prompt_text=(
-                        f"Project: {project.ref} {project.name}\n"
-                        f"Hypothesis: {project.hypothesis}\n"
-                        f"Acceptance criteria: {experiment.acceptance_criteria}\n"
-                        "Create the smallest artifact that can test this claim. "
-                        "Report immutable artifact references and checks."
+                    prompt_text=capture_agent_prompt_text(
+                        ref=project.ref,
+                        name=project.name,
+                        hypothesis=project.hypothesis,
+                        acceptance_criteria=experiment.acceptance_criteria,
+                        form=project.form,
+                        minimum_testable_artifact=(
+                            dossier.minimum_testable_artifact if dossier else ""
+                        ),
                     ),
                     priority=1,
                     created_by_id=user.id,
@@ -984,6 +1001,8 @@ async def github_webhook(
 
 
 def _campaign_link_out(row: EvaluationCampaignLink) -> EvaluationCampaignLinkOut:
+    packet = json.loads(row.packet_json or "{}")
+    survey_url = str(packet.get("survey_url") or "")
     return EvaluationCampaignLinkOut(
         id=row.id,
         project_id=row.project_id,
@@ -992,10 +1011,31 @@ def _campaign_link_out(row: EvaluationCampaignLink) -> EvaluationCampaignLinkOut
         status=row.status,
         decision_status=row.decision_status,
         recommendation=row.recommendation,
-        packet=json.loads(row.packet_json or "{}"),
+        packet=packet,
+        survey_url=survey_url,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
+
+
+@app.get(
+    "/api/projects/{project_id}/evaluation-campaigns",
+    response_model=list[EvaluationCampaignLinkOut],
+)
+def list_evaluation_campaigns(
+    project_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    if not db.get(Project, project_id):
+        raise HTTPException(404, "Project not found")
+    rows = (
+        db.query(EvaluationCampaignLink)
+        .filter(EvaluationCampaignLink.project_id == project_id)
+        .order_by(EvaluationCampaignLink.created_at.desc())
+        .all()
+    )
+    return [_campaign_link_out(row) for row in rows]
 
 
 @app.post(
@@ -1012,17 +1052,27 @@ def start_evaluation_campaign(
     if not project:
         raise HTTPException(404, "Project not found")
     client = EvalClient()
+    survey_url = ""
     try:
         remote = client.create_campaign(project.ref, body.model_dump())
+        if normalize_form(project.form) == "physical":
+            try:
+                survey = client.create_survey_link(project.ref, int(remote["id"]))
+                survey_url = str(survey.get("survey_url") or "")
+            except EvalClientError:
+                # Campaign still opens if survey minting is unavailable.
+                survey_url = ""
     except EvalClientError as exc:
         raise HTTPException(502, str(exc)) from exc
     finally:
         client.close()
+    packet = {"survey_url": survey_url} if survey_url else {}
     row = EvaluationCampaignLink(
         project_id=project.id,
         eval_campaign_id=int(remote["id"]),
         name=body.name,
         status=str(remote["status"]),
+        packet_json=json.dumps(packet),
     )
     db.add(row)
     db.commit()
@@ -1051,6 +1101,9 @@ def reconcile_evaluation_campaign(
         raise HTTPException(502, str(exc)) from exc
     finally:
         client.close()
+    prior = json.loads(row.packet_json or "{}")
+    if prior.get("survey_url") and not packet.get("survey_url"):
+        packet["survey_url"] = prior["survey_url"]
     row.packet_json = json.dumps(packet)
     row.status = packet["campaign"]["status"]
     row.decision_status = packet["status"]
@@ -1123,15 +1176,7 @@ def approve_release(
     artifact = db.get(Artifact, body.artifact_id)
     if not artifact or artifact.project_id != project.id or not artifact.immutable:
         raise HTTPException(400, "Release requires an immutable project artifact")
-    required = {
-        "security",
-        "privacy",
-        "licensing",
-        "accessibility",
-        "customer_acceptance",
-        "backup_rollback",
-        "monitoring",
-    }
+    required = set(required_release_checks(project.form))
     missing = sorted(key for key in required if body.checks.get(key) is not True)
     if missing:
         raise HTTPException(409, {"message": "Release gate blocked", "checks": missing})

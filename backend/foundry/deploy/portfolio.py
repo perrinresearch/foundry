@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from foundry.config import settings
+from foundry.forms import kind_for_form, normalize_form
 from foundry.models import PROJECT_STAGES, Project
 
 
@@ -31,7 +32,7 @@ def _slugify(name: str, ref: str) -> str:
 
 
 def _kind_for_form(form: str) -> str:
-    return "application" if form == "interactive" else "blog"
+    return kind_for_form(form)
 
 
 def _find_prototype_block(content: str, ref: str) -> tuple[int, int] | None:
@@ -74,7 +75,7 @@ def _replace_hypothesis_field(block: str, value: str) -> str:
 def _format_prototype_block(project: Project) -> str:
     name = _escape_ts_string(project.name)
     hyp = _escape_ts_string(project.hypothesis or "")
-    form = project.form if project.form in ("interactive", "static") else "interactive"
+    form = normalize_form(project.form)
     stage = project.stage if project.stage in PROJECT_STAGES else "idea"
     kind = _kind_for_form(form)
     slug = _slugify(project.name, project.ref)
@@ -144,10 +145,9 @@ def sync_portfolio_from_db(db: Session, portfolio_path: Path | None = None) -> P
             new_core = _replace_quoted_field(new_core, "stage", project.stage)
             new_core = _replace_quoted_field(new_core, "name", project.name)
             new_core = _replace_hypothesis_field(new_core, project.hypothesis)
-            new_core = _replace_quoted_field(new_core, "form", project.form)
-            kind = _kind_for_form(
-                project.form if project.form in ("interactive", "static") else "interactive"
-            )
+            form = normalize_form(project.form)
+            new_core = _replace_quoted_field(new_core, "form", form)
+            kind = _kind_for_form(form)
             new_core = _replace_quoted_field(new_core, "kind", kind)
             new_block = new_core + ("\n" if trailing_nl else "")
             if new_block != block:

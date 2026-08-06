@@ -1,9 +1,10 @@
 # Foundry operating-model pilot
 
-The first operating review uses two forms:
+The operating review covers three forms:
 
 - PR-002 Waypoint: interactive application
 - PR-004 Leading with Attention: static publication
+- A physical product pilot (mockup-first): `physical` form, portfolio kind `product`
 
 For each pilot:
 
@@ -16,15 +17,33 @@ For each pilot:
    target, and success threshold fixed before collection.
 5. Reconcile the decision packet into Foundry and conduct the human Evaluate
    gate review.
-6. If advanced, complete all release checks, deploy through the configured
-   adapter, verify health, and record the post-ship metric.
+6. If advanced, complete all **form-aware** release checks, deploy through the
+   configured adapter, verify health, and record the post-ship metric.
 7. Record time to first artifact, time to signal, operator minutes, agent
    runtime/cost, accepted evidence count, gate outcome, iteration count, and
    escaped defects.
 
-The pilot is complete only when both forms have an auditable timeline from
+The pilot is complete only when all three forms have an auditable timeline from
 intake through a decision. Manual interventions are logged during the pilot;
 only repeated, deterministic handoffs become candidates for further automation.
+
+## Physical form checklist (mockup-first)
+
+1. Create the project with `form: physical`. Set dossier MTA to a mockup
+   package (design diagrams, renderings; optional 3D print photos later).
+2. Capture gate: confirm the agent prompt asks for a mockup package with value
+   claims and a rough build-cost band.
+3. Register immutable artifacts with kinds such as `design_diagram`,
+   `rendering`, `mockup`, `model_3d`, or `prototype_photo`.
+4. Open an Eval campaign. Share the public survey URL for human feedback.
+5. Run persona evaluation grounded on diagrams/images/model previews.
+6. Reconcile the decision packet and confirm it includes a **testability**
+   assessment (`can_test`, covered/untestable claims).
+7. Evaluate gate: do not advance if `can_test` is false; iterate the mockup
+   package instead.
+8. Ship with physical release checks: safety, cost justification,
+   manufacturability, regulatory, customer acceptance, backup/rollback,
+   monitoring. Publish to the portfolio as kind `product` when approved.
 
 ## Cursor execution pilot (bounded coding)
 

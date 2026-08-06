@@ -1,11 +1,26 @@
 # Foundry operating model
 
-Version: 1.0  
-Effective: 2026-07-21
+Version: 1.1  
+Effective: 2026-08-06
 
 Foundry turns a documented claim into a monitored release through four evidence
 gates. Agents may draft work, run bounded tasks, and recommend decisions. A
 human reviewer is accountable for every stage transition and release.
+
+## Output forms
+
+Projects declare one output form. Form selects portfolio kind, capture prompt
+defaults, artifact kinds, evaluation rubric, and required release checks.
+
+| Form | Portfolio kind | Typical artifacts | Primary eval path |
+|------|----------------|-------------------|-------------------|
+| `interactive` | `application` | application, repository, deployment preview | Web embed + personas |
+| `static` | `blog` | document | Word add-in + personas |
+| `physical` | `product` | design diagram, rendering, mockup, model_3d, prototype photo, BOM, cost estimate | Public survey page + vision personas |
+
+Physical work stays flexible across electronics, mechanical, soft goods, and
+packaged goods. Prefer a **mockup-first** minimum testable artifact (diagrams
+and renderings) before committing to a full build.
 
 ## Decision outcomes
 
@@ -30,6 +45,9 @@ Required dossier:
 - decision deadline and initial evidence
 - minimum testable artifact and success criteria
 
+For `physical`, success criteria should include how value will be tested from
+the mockup package and a build-cost threshold for the next fidelity step.
+
 Exit criteria: the claim is falsifiable, a customer/requestor is identified, the
 first experiment is bounded, and the expected value justifies prototype WIP.
 
@@ -38,10 +56,13 @@ first experiment is bounded, and the expected value justifies prototype WIP.
 Required evidence:
 
 - experiment question, method, acceptance criteria, and end date
-- immutable artifact reference (commit, document version, or URL)
+- immutable artifact reference (commit, document version, media URI, or URL)
 - automated checks appropriate to the output form
 - known limitations and material risks
 - named evaluation audience and proposed rubric
+
+For `physical`, the immutable artifact set is typically a mockup package
+(diagrams/renderings, optional 3D print photos) with a completeness check.
 
 Exit criteria: the artifact is usable by the intended evaluator and the
 evaluation can distinguish success from failure.
@@ -56,23 +77,45 @@ Required decision packet:
 - confidence and evidence-coverage assessment
 - requirements or unresolved risks supported by evidence citations
 - Eval recommendation: advance, iterate, retire, or inconclusive
+- for `physical`: testability assessment (`can_test`, covered/untestable claims,
+  missing artifact kinds)
 
 Exit criteria: thresholds set before the campaign are met, evidence provenance
 is complete, and a human reviewer approves the recommendation or documents an
-override.
+override. Physical projects cannot advance when the packet reports
+`can_test: false`.
 
 ## Ship gate
 
-Required release checks:
+Required release checks are form-aware:
 
-- security, privacy, licensing, and accessibility review
+**interactive**
+
+- security, privacy, licensing, accessibility
 - customer/requestor acceptance
-- deployment target, immutable version, health check, and rollback reference
+- backup/rollback, monitoring
+
+**static**
+
+- licensing, accessibility
+- customer/requestor acceptance
+- backup/rollback, monitoring
+
+**physical**
+
+- safety, cost justification, manufacturability/sourcing, regulatory (or N/A)
+- customer/requestor acceptance
+- backup/rollback (design package revision), monitoring (post-ship outcome metric)
+
+Shared ship requirements for all forms:
+
+- deployment target, immutable version, and release approver
 - monitoring and post-ship success metric
-- release approver
 
 Shipping creates a release record. Public portfolio publication follows an
 approved release; setting a project stage alone is not publication approval.
+Physical v1 ships via portfolio listing and/or an `external` adapter; there is
+no manufacturing automation in Foundry.
 
 ## Agent execution
 
@@ -81,9 +124,10 @@ claim a prompt, run a **local** Cursor SDK agent against
 `FOUNDRY_REPOS_ROOT/<repo_slug>` (or the claim `repo_cwd`), heartbeat the lease,
 and complete with notes, runtime, cost, and artifact refs (branch/commit).
 
-Cursor is a bounded code executor, not a stage decision-maker. Completing a
-prompt moves the task to `testing` for human review; it does not advance the
-project stage.
+Capture prompts are form-aware: physical projects ask for a mockup package, not
+a code artifact. Cursor remains a bounded executor, not a stage decision-maker.
+Completing a prompt moves the task to `testing` for human review; it does not
+advance the project stage.
 
 ## Work-in-progress limits
 

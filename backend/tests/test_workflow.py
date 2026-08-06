@@ -214,11 +214,88 @@ def test_agent_prompt_claim_and_completion_are_idempotent(client):
     assert first.json()["artifact_refs"] == ["git:abc123"]
 
 
+def _release_checks_for_form(form: str) -> dict[str, bool]:
+    if form == "physical":
+        keys = (
+            "safety",
+            "cost_justification",
+            "manufacturability",
+            "regulatory",
+            "customer_acceptance",
+            "backup_rollback",
+            "monitoring",
+        )
+    elif form == "static":
+        keys = (
+            "licensing",
+            "accessibility",
+            "customer_acceptance",
+            "backup_rollback",
+            "monitoring",
+        )
+    else:
+        keys = (
+            "security",
+            "privacy",
+            "licensing",
+            "accessibility",
+            "customer_acceptance",
+            "backup_rollback",
+            "monitoring",
+        )
+    return {key: True for key in keys}
+
+
+def _artifact_kind_for_form(form: str) -> str:
+    if form == "physical":
+        return "mockup"
+    if form == "static":
+        return "document"
+    return "application"
+
+
+def _domain_for_form(form: str) -> str:
+    if form == "physical":
+        return "Hardware"
+    if form == "static":
+        return "Leadership"
+    return "AI/ML"
+
+
+def _campaign_packet(artifact_uri: str, form: str) -> dict:
+    dimensions = (
+        {
+            "testability": {"mean": 4.0},
+            "value_fit": {"mean": 4.0},
+            "build_justification": {"mean": 4.0},
+            "resonance": {"mean": 4.0},
+            "clarity": {"mean": 4.0},
+        }
+        if form == "physical"
+        else {"usage": {"mean": 4.0}}
+    )
+    packet = {
+        "confidence": "sufficient",
+        "evidence_refs": [artifact_uri],
+        "recommendation": "advance",
+        "quantitative_results": {"dimensions": dimensions},
+    }
+    if form == "physical":
+        packet["testability"] = {
+            "can_test": True,
+            "covered_claims": ["value claim"],
+            "untestable_claims": [],
+            "missing_artifact_kinds": [],
+            "narrative": "Mockup package covers stated claims.",
+        }
+    return packet
+
+
 @pytest.mark.parametrize(
     ("ref", "form"),
-    [("PR-002", "interactive"), ("PR-004", "static")],
+    [("PR-002", "interactive"), ("PR-004", "static"), ("PR-007", "physical")],
 )
-def test_two_form_pilot_reaches_release_gate(client, session, ref, form):
+def test_three_form_pilot_reaches_release_gate(client, session, ref, form):
     project = client.post(
         "/api/projects",
         json={
@@ -235,7 +312,7 @@ def test_two_form_pilot_reaches_release_gate(client, session, ref, form):
         "observable_problem": "Current workflow is manual",
         "expected_value": "Shorter time to signal",
         "falsification_condition": "No measurable improvement",
-        "domain": "AI/ML" if form == "interactive" else "Leadership",
+        "domain": _domain_for_form(form),
         "initial_evidence": "Pilot request",
         "minimum_testable_artifact": "Testable pilot artifact",
         "success_criteria": "Two reviewers score the artifact",
@@ -250,6 +327,11 @@ def test_two_form_pilot_reaches_release_gate(client, session, ref, form):
     )
     workflow = client.get(f"/api/projects/{project['id']}/workflow").json()
     experiment = workflow["experiments"][0]
+    prompts = session.query(AgentPrompt).all()
+    assert len(prompts) == 1
+    if form == "physical":
+        assert "mockup package" in prompts[0].prompt_text
+        assert "Form: physical" in prompts[0].prompt_text
     client.patch(
         f"/api/experiments/{experiment['id']}",
         json={"status": "running"},
@@ -258,7 +340,7 @@ def test_two_form_pilot_reaches_release_gate(client, session, ref, form):
         f"/api/projects/{project['id']}/artifacts",
         json={
             "experiment_id": experiment["id"],
-            "kind": "application" if form == "interactive" else "document",
+            "kind": _artifact_kind_for_form(form),
             "title": "Pilot artifact",
             "uri": f"artifact:{ref}:v1",
             "version": "v1",
@@ -284,16 +366,7 @@ def test_two_form_pilot_reaches_release_gate(client, session, ref, form):
         status="completed",
         decision_status="approved",
         recommendation="advance",
-        packet_json=json.dumps(
-            {
-                "confidence": "sufficient",
-                "evidence_refs": [artifact["uri"]],
-                "recommendation": "advance",
-                "quantitative_results": {
-                    "dimensions": {"usage": {"mean": 4.0}}
-                },
-            }
-        ),
+        packet_json=json.dumps(_campaign_packet(artifact["uri"], form)),
     )
     session.add(link)
     session.commit()
@@ -316,6 +389,93 @@ def test_two_form_pilot_reaches_release_gate(client, session, ref, form):
             "target": f"https://example.test/{ref.lower()}",
             "rollback_reference": "artifact:previous",
             "monitoring_metric": "pilot_success_rate",
+            "checks": _release_checks_for_form(form),
+        },
+    )
+    assert release.status_code == 200, release.text
+    assert release.json()["status"] == "approved"
+
+
+def test_physical_release_rejects_software_only_checks(client, session):
+    project = client.post(
+        "/api/projects",
+        json={
+            "ref": "PR-908",
+            "name": "Physical checks",
+            "hypothesis": "Mockup justifies build",
+            "customer": "Maker",
+            "form": "physical",
+            "stage": "idea",
+            "visibility": "private",
+        },
+    ).json()
+    client.put(
+        f"/api/projects/{project['id']}/dossier",
+        json={
+            "observable_problem": "No validated mockup",
+            "expected_value": "Build confidence",
+            "falsification_condition": "Users reject concept",
+            "domain": "Hardware",
+            "initial_evidence": "Sketch",
+            "minimum_testable_artifact": "Diagram set",
+            "success_criteria": "Survey support",
+        },
+    )
+    client.post(
+        f"/api/projects/{project['id']}/gate-reviews",
+        json={"outcome": "advance", "rationale": "Capture complete"},
+    )
+    workflow = client.get(f"/api/projects/{project['id']}/workflow").json()
+    experiment = workflow["experiments"][0]
+    client.patch(f"/api/experiments/{experiment['id']}", json={"status": "running"})
+    artifact = client.post(
+        f"/api/projects/{project['id']}/artifacts",
+        json={
+            "experiment_id": experiment["id"],
+            "kind": "mockup",
+            "title": "Mockup",
+            "uri": "artifact:PR-908:v1",
+            "version": "v1",
+            "checks_status": "passed",
+            "immutable": True,
+        },
+    ).json()
+    client.post(
+        f"/api/projects/{project['id']}/gate-reviews",
+        json={
+            "outcome": "advance",
+            "rationale": "Prototype ready",
+            "evidence_refs": [artifact["uri"]],
+        },
+    )
+    session.add(
+        EvaluationCampaignLink(
+            project_id=project["id"],
+            eval_campaign_id=1908,
+            name="Eval",
+            status="completed",
+            decision_status="approved",
+            recommendation="advance",
+            packet_json=json.dumps(_campaign_packet(artifact["uri"], "physical")),
+        )
+    )
+    session.commit()
+    client.post(
+        f"/api/projects/{project['id']}/gate-reviews",
+        json={
+            "outcome": "advance",
+            "rationale": "Advance to ship",
+            "evidence_refs": ["eval:pilot"],
+        },
+    )
+    blocked = client.post(
+        f"/api/projects/{project['id']}/releases",
+        json={
+            "artifact_id": artifact["id"],
+            "version": "v1",
+            "target": "portfolio",
+            "rollback_reference": "design:v0",
+            "monitoring_metric": "interest_rate",
             "checks": {
                 "security": True,
                 "privacy": True,
@@ -327,5 +487,18 @@ def test_two_form_pilot_reaches_release_gate(client, session, ref, form):
             },
         },
     )
-    assert release.status_code == 200, release.text
-    assert release.json()["status"] == "approved"
+    assert blocked.status_code == 409
+    assert "cost_justification" in blocked.json()["detail"]["checks"]
+
+
+def test_reject_unknown_form(client):
+    response = client.post(
+        "/api/projects",
+        json={
+            "ref": "PR-909",
+            "name": "Bad form",
+            "hypothesis": "x",
+            "form": "hardware",
+        },
+    )
+    assert response.status_code == 422

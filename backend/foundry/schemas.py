@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from foundry.forms import PROJECT_FORMS
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -73,11 +75,19 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     hypothesis: str = ""
     customer: str = Field(default="", max_length=255)
-    form: str = "interactive"
+    form: str = Field(default="interactive", pattern=r"^(interactive|static|physical)$")
     stage: str = "idea"
     priority: str = "normal"
     visibility: str = "public"
     repo_slug: str = Field(default="", max_length=100, pattern=REPO_SLUG_PATTERN)
+
+    @field_validator("form")
+    @classmethod
+    def validate_form(cls, value: str) -> str:
+        form = (value or "").strip().lower()
+        if form not in PROJECT_FORMS:
+            raise ValueError(f"form must be one of: {', '.join(PROJECT_FORMS)}")
+        return form
 
     @field_validator("repo_slug")
     @classmethod
@@ -89,7 +99,9 @@ class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     hypothesis: str | None = None
     customer: str | None = Field(default=None, max_length=255)
-    form: str | None = None
+    form: str | None = Field(
+        default=None, pattern=r"^(interactive|static|physical)$"
+    )
     stage: str | None = None
     status: str | None = None
     priority: str | None = None
@@ -97,6 +109,16 @@ class ProjectUpdate(BaseModel):
     repo_slug: str | None = Field(
         default=None, max_length=100, pattern=REPO_SLUG_PATTERN
     )
+
+    @field_validator("form")
+    @classmethod
+    def validate_form(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        form = value.strip().lower()
+        if form not in PROJECT_FORMS:
+            raise ValueError(f"form must be one of: {', '.join(PROJECT_FORMS)}")
+        return form
 
     @field_validator("repo_slug")
     @classmethod
@@ -263,6 +285,7 @@ class EvaluationCampaignLinkOut(BaseModel):
     decision_status: str
     recommendation: str
     packet: dict
+    survey_url: str = ""
     created_at: datetime
     updated_at: datetime
 

@@ -35,7 +35,8 @@ dossier, experiments, immutable artifacts, Eval campaigns, and human gate
 reviews to advance through `prototype`, `evaluation`, and `shipped`.
 
 - Operating contract: [docs/operating-model.md](docs/operating-model.md)
-- Two-form pilot: [docs/pilot-runbook.md](docs/pilot-runbook.md)
+- Three-form pilot (interactive, static, physical): [docs/pilot-runbook.md](docs/pilot-runbook.md)
+- Output forms: `interactive` (application), `static` (writing), `physical` (product)
 - Agent prompts support atomic claim/lease, heartbeat, retries, idempotent
   completion, runtime/cost, and artifact provenance.
 - GitHub webhooks register commits, pull requests, CI checks, and deployment

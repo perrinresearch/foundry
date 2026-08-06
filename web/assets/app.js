@@ -64,6 +64,7 @@ let state = {
   tasks: [],
   prompts: [],
   workflow: null,
+  campaigns: [],
   users: [],
   me: null,
 };
@@ -184,10 +185,11 @@ async function loadProjects() {
 
 async function loadProject(id) {
   state.selectedProject = await api(`/api/projects/${id}`);
-  [state.tasks, state.prompts, state.workflow] = await Promise.all([
+  [state.tasks, state.prompts, state.workflow, state.campaigns] = await Promise.all([
     api(`/api/projects/${id}/tasks`),
     api(`/api/agent-prompts?project_id=${id}`),
     api(`/api/projects/${id}/workflow`),
+    api(`/api/projects/${id}/evaluation-campaigns`),
   ]);
   render();
 }
@@ -454,7 +456,7 @@ function renderProjectDetail() {
   };
   toolbar.appendChild(addTask);
   main.appendChild(toolbar);
-  main.appendChild(renderWorkflowPanel(p, state.workflow));
+  main.appendChild(renderWorkflowPanel(p, state.workflow, state.campaigns || []));
 
   const board = el("div", "kanban");
   for (const col of KANBAN_COLS) {
@@ -520,13 +522,30 @@ function renderProjectDetail() {
   main.appendChild(board);
 }
 
-function renderWorkflowPanel(project, workflow) {
+function renderWorkflowPanel(project, workflow, campaigns) {
   const panel = el("section", "panel");
   if (!workflow) {
     panel.textContent = "Workflow unavailable.";
     return panel;
   }
   const blockers = workflow.blockers || [];
+  const campaignRows = (campaigns || [])
+    .slice(0, 3)
+    .map((campaign) => {
+      const testability = campaign.packet?.testability;
+      const testLine = testability
+        ? ` · testability: ${
+            testability.can_test ? "can test" : "cannot test"
+          }`
+        : "";
+      const survey = campaign.survey_url
+        ? ` · <a href="${escapeHtml(campaign.survey_url)}" target="_blank" rel="noopener">survey</a>`
+        : "";
+      return `<li><span class="mono">${escapeHtml(campaign.status)}</span> ${escapeHtml(
+        campaign.name
+      )} · ${escapeHtml(campaign.recommendation || "pending")}${testLine}${survey}</li>`;
+    })
+    .join("");
   panel.innerHTML = `
     <p class="overline">Evidence gate · policy ${escapeHtml(workflow.policy_version)}</p>
     <h3>${workflow.readiness.can_advance ? "Ready for review" : "Gate blocked"}</h3>
@@ -536,6 +555,11 @@ function renderWorkflowPanel(project, workflow) {
         : "<p>Required evidence is present. A human gate review is still required.</p>"
     }
     <p class="field-hint">${workflow.experiments.length} experiment(s) · ${workflow.artifacts.length} artifact(s) · ${workflow.reviews.length} review(s)</p>
+    ${
+      campaignRows
+        ? `<p class="field-hint">Evaluation campaigns</p><ol class="workflow-timeline">${campaignRows}</ol>`
+        : ""
+    }
     ${
       workflow.reviews.length
         ? `<ol class="workflow-timeline">${workflow.reviews
@@ -567,11 +591,43 @@ function renderWorkflowPanel(project, workflow) {
   const campaign = el("button", "btn btn-sm secondary", "Start evaluation");
   campaign.onclick = () => startEvaluationCampaign(project, workflow.artifacts);
   actions.appendChild(campaign);
+  if ((campaigns || []).length) {
+    const reconcile = el("button", "btn btn-sm secondary", "Reconcile eval");
+    reconcile.onclick = () => reconcileLatestCampaign(project, campaigns[0]);
+    actions.appendChild(reconcile);
+  }
   const review = el("button", "btn btn-sm", "Gate review");
   review.onclick = () => submitGateReview(project);
   actions.appendChild(review);
   panel.appendChild(actions);
   return panel;
+}
+
+async function reconcileLatestCampaign(project, campaign) {
+  if (!campaign) return;
+  try {
+    const link = await api(
+      `/api/projects/${project.id}/evaluation-campaigns/${campaign.id}/reconcile`,
+      { method: "POST" }
+    );
+    const testability = link.packet?.testability;
+    const lines = [
+      `Campaign: ${link.name}`,
+      `Status: ${link.status}`,
+      `Recommendation: ${link.recommendation || "pending"}`,
+    ];
+    if (testability) {
+      lines.push(
+        `Testability: ${testability.can_test ? "can test" : "cannot test"}`
+      );
+      if (testability.narrative) lines.push(testability.narrative);
+    }
+    if (link.survey_url) lines.push(`Survey: ${link.survey_url}`);
+    alert(lines.join("\n"));
+    await loadProject(project.id);
+  } catch (err) {
+    alert(err.message || "Reconcile failed");
+  }
 }
 
 async function editDossier(project, current) {
@@ -597,7 +653,11 @@ async function editDossier(project, current) {
     <label for="do-evidence">Initial evidence</label>
     <textarea id="do-evidence" rows="2" placeholder="Existing signal, interviews, notes…"></textarea>
     <label for="do-artifact">Minimum testable artifact</label>
-    <textarea id="do-artifact" rows="2" placeholder="Smallest thing that can be evaluated"></textarea>
+    <textarea id="do-artifact" rows="2" placeholder="${
+      project.form === "physical"
+        ? "Diagrams, renderings/mockups, value claims, rough build-cost band"
+        : "Smallest thing that can be evaluated"
+    }"></textarea>
     <label for="do-success">Success criteria</label>
     <textarea id="do-success" rows="2" placeholder="How will you know the gate is met?"></textarea>
     <label for="do-deadline">Decision deadline</label>
@@ -727,7 +787,31 @@ async function addArtifact(project, experiments) {
   closeWorkflowModals();
   const overlay = el("div", "task-editor-overlay");
   overlay.id = "artifact-editor-overlay";
-  const defaultKind = project.form === "static" ? "document" : "application";
+  const defaultKind =
+    project.form === "physical"
+      ? "mockup"
+      : project.form === "static"
+        ? "document"
+        : "application";
+  const kindOptions =
+    project.form === "physical"
+      ? [
+          ["design_diagram", "Design diagram"],
+          ["rendering", "Rendering"],
+          ["mockup", "Mockup"],
+          ["model_3d", "3D model"],
+          ["prototype_photo", "Prototype photo"],
+          ["bom", "BOM"],
+          ["cost_estimate", "Cost estimate"],
+          ["document", "Document"],
+          ["other", "Other"],
+        ]
+      : [
+          ["application", "Application"],
+          ["document", "Document"],
+          ["dataset", "Dataset"],
+          ["other", "Other"],
+        ];
   const experimentOptions = [
     `<option value="">None</option>`,
     ...(experiments || []).map(
@@ -751,10 +835,12 @@ async function addArtifact(project, experiments) {
     <input id="ar-commit" type="text" placeholder="Optional git commit" class="mono" />
     <label for="ar-kind">Kind</label>
     <select id="ar-kind">
-      <option value="application">Application</option>
-      <option value="document">Document</option>
-      <option value="dataset">Dataset</option>
-      <option value="other">Other</option>
+      ${kindOptions
+        .map(
+          ([value, label]) =>
+            `<option value="${value}">${escapeHtml(label)}</option>`
+        )
+        .join("")}
     </select>
     <label for="ar-experiment">Linked experiment</label>
     <select id="ar-experiment">${experimentOptions}</select>
@@ -836,7 +922,7 @@ async function startEvaluationCampaign(project, artifacts) {
   const name = prompt("Campaign name", `${project.ref} evaluation`);
   if (!name) return;
   const sample_target = Number(prompt("Accepted feedback target", "3") || "3");
-  await api(`/api/projects/${project.id}/evaluation-campaigns`, {
+  const link = await api(`/api/projects/${project.id}/evaluation-campaigns`, {
     method: "POST",
     body: JSON.stringify({
       name,
@@ -848,7 +934,17 @@ async function startEvaluationCampaign(project, artifacts) {
       status: "open",
     }),
   });
-  alert("Evaluation campaign opened in Foundry Eval.");
+  if (link.survey_url) {
+    const copy = window.confirm(
+      `Evaluation campaign opened.\n\nPublic survey URL:\n${link.survey_url}\n\nCopy URL to clipboard?`
+    );
+    if (copy && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(link.survey_url);
+    }
+  } else {
+    alert("Evaluation campaign opened in Foundry Eval.");
+  }
+  await loadProject(project.id);
 }
 
 async function submitGateReview(project) {
@@ -971,6 +1067,7 @@ function showNewProjectForm() {
     <select id="np-form">
       <option value="interactive">Interactive (application)</option>
       <option value="static">Static (writing)</option>
+      <option value="physical">Physical (product)</option>
     </select>
     <p class="field-hint">New projects enter the Idea stage and advance through evidence gates.</p>
     <label for="np-priority">Priority</label>

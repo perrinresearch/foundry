@@ -107,6 +107,20 @@ SEED_PROJECTS = [
             ("Prototype exercise progression framework", "backlog"),
         ],
     },
+    {
+        "ref": "PR-007",
+        "name": "Physical mockup pilot",
+        "hypothesis": (
+            "A mockup-first physical product package (diagrams and renderings) can "
+            "test whether claimed user value justifies the next build-cost increment."
+        ),
+        "form": "physical",
+        "stage": "idea",
+        "tasks": [
+            ("Assemble design diagram and rendering package", "backlog"),
+            ("Define value claims and rough build-cost band", "backlog"),
+        ],
+    },
 ]
 
 
