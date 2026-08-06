@@ -915,6 +915,7 @@ function closeWorkflowModals() {
   document.getElementById("dossier-editor-overlay")?.remove();
   document.getElementById("experiment-editor-overlay")?.remove();
   document.getElementById("artifact-editor-overlay")?.remove();
+  document.getElementById("gate-review-overlay")?.remove();
 }
 
 async function startEvaluationCampaign(project, artifacts) {
@@ -948,36 +949,109 @@ async function startEvaluationCampaign(project, artifacts) {
 }
 
 async function submitGateReview(project) {
-  const outcome = (prompt("Outcome: advance, iterate, hold, or retire", "advance") || "")
-    .trim()
-    .toLowerCase();
-  if (!outcome) return;
-  const rationale = prompt("Decision rationale");
-  if (!rationale) return;
-  const refs = (prompt("Evidence references (comma-separated)", "") || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const next_action =
-    outcome === "iterate" || outcome === "hold"
-      ? prompt("Required next action") || ""
-      : "";
-  try {
-    await api(`/api/projects/${project.id}/gate-reviews`, {
-      method: "POST",
-      body: JSON.stringify({
-        outcome,
-        rationale,
-        evidence_refs: refs,
-        next_action,
-        unresolved_risks: prompt("Unresolved risks", "") || "",
-        policy_version: "1.0",
-      }),
-    });
-    await loadProject(project.id);
-  } catch (error) {
-    alert(error.message);
-  }
+  closeWorkflowModals();
+  const overlay = el("div", "task-editor-overlay");
+  overlay.id = "gate-review-overlay";
+
+  const stageLabel =
+    PROJECT_STAGES.find((s) => s.id === project.stage)?.label || project.stage;
+  const panel = el("div", "task-editor login-card");
+  panel.innerHTML = `
+    <p class="overline">Gate review · ${escapeHtml(project.ref)} · ${escapeHtml(stageLabel)}</p>
+    <label for="gr-outcome">Outcome</label>
+    <select id="gr-outcome">
+      <option value="advance" selected>Advance</option>
+      <option value="iterate">Iterate</option>
+      <option value="hold">Hold</option>
+      <option value="retire">Retire</option>
+    </select>
+    <label for="gr-rationale">Decision rationale</label>
+    <textarea id="gr-rationale" rows="3" placeholder="Why this outcome?"></textarea>
+    <label for="gr-evidence">Evidence references</label>
+    <textarea id="gr-evidence" rows="2" placeholder="Comma-separated refs (artifact URIs, interviews, eval:…)"></textarea>
+    <label for="gr-next">Next action</label>
+    <textarea id="gr-next" rows="2" placeholder="Required for iterate or hold"></textarea>
+    <p class="field-hint" id="gr-next-hint">Required when outcome is iterate or hold.</p>
+    <label for="gr-risks">Unresolved risks</label>
+    <textarea id="gr-risks" rows="2" placeholder="Optional — required for WIP override"></textarea>
+    ${
+      state.me?.is_admin
+        ? `<label class="check" style="display:flex;align-items:center;gap:0.5rem;text-transform:none;letter-spacing:0;margin-top:0.75rem">
+      <input id="gr-wip" type="checkbox" style="width:auto;margin:0" />
+      WIP override (admin)
+    </label>
+    <p class="field-hint">Override requires risks and an expiry/constraint in next action.</p>`
+        : ""
+    }
+    <div class="task-editor-buttons">
+      <button type="button" class="btn" id="gr-save">Submit review</button>
+      <button type="button" class="btn btn-sm secondary" id="gr-cancel">Cancel</button>
+    </div>
+    <p id="gr-error" class="error hidden"></p>
+  `;
+
+  const outcomeSel = panel.querySelector("#gr-outcome");
+  const nextHint = panel.querySelector("#gr-next-hint");
+  const syncNextHint = () => {
+    const needsNext = outcomeSel.value === "iterate" || outcomeSel.value === "hold";
+    nextHint.textContent = needsNext
+      ? "Required for iterate or hold."
+      : "Optional unless using a WIP override.";
+  };
+  outcomeSel.onchange = syncNextHint;
+  syncNextHint();
+
+  panel.querySelector("#gr-cancel").onclick = closeWorkflowModals;
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) closeWorkflowModals();
+  });
+  panel.querySelector("#gr-save").onclick = async () => {
+    const errEl = panel.querySelector("#gr-error");
+    errEl.classList.add("hidden");
+    const outcome = outcomeSel.value;
+    const rationale = panel.querySelector("#gr-rationale").value.trim();
+    const next_action = panel.querySelector("#gr-next").value.trim();
+    const unresolved_risks = panel.querySelector("#gr-risks").value.trim();
+    const evidence_refs = panel
+      .querySelector("#gr-evidence")
+      .value.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const wip_override = Boolean(panel.querySelector("#gr-wip")?.checked);
+    if (!rationale) {
+      errEl.textContent = "Decision rationale is required.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    if ((outcome === "iterate" || outcome === "hold") && !next_action) {
+      errEl.textContent = "Iterate and hold require a next action.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    try {
+      await api(`/api/projects/${project.id}/gate-reviews`, {
+        method: "POST",
+        body: JSON.stringify({
+          outcome,
+          rationale,
+          evidence_refs,
+          next_action,
+          unresolved_risks,
+          wip_override,
+          policy_version: "1.0",
+        }),
+      });
+      closeWorkflowModals();
+      await loadProject(project.id);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+    }
+  };
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  panel.querySelector("#gr-rationale").focus();
 }
 
 function renderAgents() {
