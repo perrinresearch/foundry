@@ -1042,11 +1042,36 @@ function closeProjectCreator() {
   document.getElementById("project-creator-overlay")?.remove();
 }
 
-function showNewProjectForm() {
+/** Next PR-NNN from existing refs (zero-padded to match current width). */
+function nextProjectRef(projects) {
+  let max = -1;
+  let width = 3;
+  for (const project of projects || []) {
+    const match = String(project.ref || "")
+      .trim()
+      .toUpperCase()
+      .match(/^PR-(\d+)$/);
+    if (!match) continue;
+    const n = Number(match[1]);
+    if (Number.isFinite(n) && n > max) max = n;
+    width = Math.max(width, match[1].length);
+  }
+  return `PR-${String(max + 1).padStart(width, "0")}`;
+}
+
+async function showNewProjectForm() {
   closeProjectCreator();
   closeProjectEditor();
   closeTaskEditor();
   closePromptEditor();
+
+  let allProjects = state.projects || [];
+  try {
+    allProjects = await api("/api/projects?status=all");
+  } catch (_) {
+    /* fall back to currently loaded list */
+  }
+  const suggestedRef = nextProjectRef(allProjects);
 
   const overlay = el("div", "task-editor-overlay");
   overlay.id = "project-creator-overlay";
@@ -1055,8 +1080,8 @@ function showNewProjectForm() {
   panel.innerHTML = `
     <p class="overline">New project</p>
     <label for="np-ref">Ref</label>
-    <input id="np-ref" type="text" placeholder="PR-007" />
-    <p class="field-hint">Uppercase letters, numbers, and hyphens only (e.g. PR-007).</p>
+    <input id="np-ref" type="text" autocomplete="off" />
+    <p class="field-hint" id="np-ref-hint">Uppercase letters, numbers, and hyphens only.</p>
     <label for="np-name">Name</label>
     <input id="np-name" type="text" placeholder="Project name" />
     <label for="np-hyp">Hypothesis</label>
@@ -1086,6 +1111,11 @@ function showNewProjectForm() {
   `;
 
   const prioritySel = panel.querySelector("#np-priority");
+  const refInput = panel.querySelector("#np-ref");
+  refInput.placeholder = suggestedRef;
+  refInput.value = suggestedRef;
+  panel.querySelector("#np-ref-hint").textContent =
+    `Uppercase letters, numbers, and hyphens only (e.g. ${suggestedRef}).`;
   for (const p of PROJECT_PRIORITIES) {
     const o = document.createElement("option");
     o.value = p.id;
@@ -1117,7 +1147,7 @@ function showNewProjectForm() {
       return;
     }
     if (!/^[A-Z0-9-]+$/.test(ref)) {
-      errEl.textContent = "Ref must use only letters, numbers, and hyphens (e.g. PR-007).";
+      errEl.textContent = `Ref must use only letters, numbers, and hyphens (e.g. ${suggestedRef}).`;
       errEl.classList.remove("hidden");
       return;
     }
