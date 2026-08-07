@@ -987,11 +987,17 @@ async function submitGateReview(project) {
       <button type="button" class="btn" id="gr-save">Submit review</button>
       <button type="button" class="btn btn-sm secondary" id="gr-cancel">Cancel</button>
     </div>
+    <p id="gr-status" class="field-hint hidden" aria-live="polite"></p>
     <p id="gr-error" class="error hidden"></p>
   `;
 
   const outcomeSel = panel.querySelector("#gr-outcome");
   const nextHint = panel.querySelector("#gr-next-hint");
+  const saveBtn = panel.querySelector("#gr-save");
+  const cancelBtn = panel.querySelector("#gr-cancel");
+  const statusEl = panel.querySelector("#gr-status");
+  const errEl = panel.querySelector("#gr-error");
+  let submitting = false;
   const syncNextHint = () => {
     const needsNext = outcomeSel.value === "iterate" || outcomeSel.value === "hold";
     nextHint.textContent = needsNext
@@ -1001,12 +1007,34 @@ async function submitGateReview(project) {
   outcomeSel.onchange = syncNextHint;
   syncNextHint();
 
-  panel.querySelector("#gr-cancel").onclick = closeWorkflowModals;
+  const setSubmitting = (busy) => {
+    submitting = busy;
+    saveBtn.disabled = busy;
+    cancelBtn.disabled = busy;
+    panel.setAttribute("aria-busy", busy ? "true" : "false");
+    if (busy) {
+      saveBtn.textContent = "Submitting…";
+      statusEl.textContent =
+        outcomeSel.value === "advance"
+          ? "Saving review and provisioning repository if needed. This can take a few seconds…"
+          : "Saving review…";
+      statusEl.classList.remove("hidden");
+      errEl.classList.add("hidden");
+    } else {
+      saveBtn.textContent = "Submit review";
+      statusEl.textContent = "";
+      statusEl.classList.add("hidden");
+    }
+  };
+
+  cancelBtn.onclick = () => {
+    if (!submitting) closeWorkflowModals();
+  };
   overlay.addEventListener("click", (ev) => {
-    if (ev.target === overlay) closeWorkflowModals();
+    if (ev.target === overlay && !submitting) closeWorkflowModals();
   });
-  panel.querySelector("#gr-save").onclick = async () => {
-    const errEl = panel.querySelector("#gr-error");
+  saveBtn.onclick = async () => {
+    if (submitting) return;
     errEl.classList.add("hidden");
     const outcome = outcomeSel.value;
     const rationale = panel.querySelector("#gr-rationale").value.trim();
@@ -1028,6 +1056,7 @@ async function submitGateReview(project) {
       errEl.classList.remove("hidden");
       return;
     }
+    setSubmitting(true);
     try {
       await api(`/api/projects/${project.id}/gate-reviews`, {
         method: "POST",
@@ -1046,6 +1075,7 @@ async function submitGateReview(project) {
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.remove("hidden");
+      setSubmitting(false);
     }
   };
 

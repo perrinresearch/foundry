@@ -261,8 +261,18 @@ textarea { min-height: 5rem; resize: vertical; }
   cursor: pointer;
 }
 .btn:hover { background: var(--color-ember-deep); border-color: var(--color-ember-deep); }
+.btn:disabled,
+.btn:disabled:hover {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
+}
 .btn.secondary { background: transparent; color: var(--color-text); border-color: var(--color-border); }
 .btn.secondary:hover { border-color: var(--color-ember); color: var(--color-ember); }
+.btn.secondary:disabled:hover {
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
 .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8125rem; }
 
 .project-grid {
