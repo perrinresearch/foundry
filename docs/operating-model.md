@@ -134,7 +134,7 @@ advance the project stage.
 Initial limits are portfolio-wide and should be changed only in a documented
 operating review:
 
-- prototype: 3 active projects
+- prototype: 5 active projects
 - evaluation: 3 active projects
 - ship review: 2 active projects
 

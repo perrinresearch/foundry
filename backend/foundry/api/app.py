@@ -708,7 +708,7 @@ def create_gate_review(
         blockers = _gate_blockers(db, project)
         if blockers:
             raise HTTPException(409, {"message": "Gate is blocked", "blockers": blockers})
-        limit = {"prototype": 3, "evaluation": 3, "shipped": 2}.get(target_stage)
+        limit = {"prototype": 5, "evaluation": 3, "shipped": 2}.get(target_stage)
         if limit is not None:
             active_count = (
                 db.query(Project)
