@@ -49,11 +49,226 @@ function isValidRepoSlug(slug) {
   return REPO_SLUG_RE.test(slug);
 }
 
+const GITHUB_OWNER = "perrinresearch";
+
 const REPO_SLUG_HINT =
-  "GitHub repo name: letters, numbers, hyphens, underscores, and periods (e.g. perrinresearch.com). Blank = no GitHub.";
+  "GitHub repo name: letters, numbers, hyphens, underscores, and periods (e.g. perrinresearch.com).";
 
 const REPO_SLUG_ERROR =
   "GitHub repo name must use only letters, numbers, hyphens, underscores, and periods (1–100 chars; cannot start with '-' or end with .git).";
+
+const REPO_FORK_SOURCE_ERROR =
+  "Fork source must be owner/repo (e.g. octocat/Hello-World).";
+
+function repoFieldMarkup(prefix) {
+  return `
+    <label for="${prefix}-repo-mode">Repository</label>
+    <select id="${prefix}-repo-mode">
+      <option value="existing">Use existing (${GITHUB_OWNER})</option>
+      <option value="create">Create new</option>
+      <option value="fork">Fork from elsewhere</option>
+      <option value="none">None (Foundry only)</option>
+    </select>
+    <div id="${prefix}-repo-existing" class="repo-mode-panel">
+      <label for="${prefix}-repo-manual">Repo name</label>
+      <input id="${prefix}-repo-manual" type="text" placeholder="my-existing-repo" autocomplete="off" />
+      <div id="${prefix}-repo-browser">
+        <label for="${prefix}-repo-filter">Or pick from list</label>
+        <input id="${prefix}-repo-filter" type="search" placeholder="Filter loaded repos…" autocomplete="off" />
+        <select id="${prefix}-repo-select" size="6"></select>
+      </div>
+      <p class="field-hint" id="${prefix}-repo-existing-hint">Loading repositories…</p>
+    </div>
+    <div id="${prefix}-repo-create" class="repo-mode-panel hidden">
+      <label for="${prefix}-repo-create-name">New repo name</label>
+      <input id="${prefix}-repo-create-name" type="text" placeholder="my-project" autocomplete="off" />
+      <p class="field-hint">${REPO_SLUG_HINT} Created under ${GITHUB_OWNER}/ at gate advance if missing.</p>
+    </div>
+    <div id="${prefix}-repo-fork" class="repo-mode-panel hidden">
+      <label for="${prefix}-repo-fork-source">Source (owner/repo)</label>
+      <input id="${prefix}-repo-fork-source" type="text" placeholder="octocat/Hello-World" autocomplete="off" />
+      <label for="${prefix}-repo-fork-name">Target name (optional)</label>
+      <input id="${prefix}-repo-fork-name" type="text" placeholder="defaults to source repo name" autocomplete="off" />
+      <p class="field-hint">Forks into ${GITHUB_OWNER}/ when you save, then links that fork.</p>
+    </div>
+    <p class="field-hint" id="${prefix}-repo-preview"></p>
+  `;
+}
+
+function parseForkSource(value) {
+  const raw = String(value || "")
+    .trim()
+    .replace(/\.git$/i, "");
+  if (!raw || raw.split("/").length !== 2) return null;
+  const [owner, repo] = raw.split("/").map((part) => part.trim());
+  if (!owner || !repo || owner.startsWith("-") || repo.startsWith("-")) return null;
+  if (!isValidRepoSlug(repo)) return null;
+  return { owner, repo, source: `${owner}/${repo}` };
+}
+
+/**
+ * Wire repository mode UI. Returns async resolveRepoSlug() → string slug
+ * (may call GitHub fork API).
+ */
+function setupRepoField(panel, { prefix, initialSlug = "" }) {
+  const modeSel = panel.querySelector(`#${prefix}-repo-mode`);
+  const existingPanel = panel.querySelector(`#${prefix}-repo-existing`);
+  const createPanel = panel.querySelector(`#${prefix}-repo-create`);
+  const forkPanel = panel.querySelector(`#${prefix}-repo-fork`);
+  const browserEl = panel.querySelector(`#${prefix}-repo-browser`);
+  const selectEl = panel.querySelector(`#${prefix}-repo-select`);
+  const filterEl = panel.querySelector(`#${prefix}-repo-filter`);
+  const manualEl = panel.querySelector(`#${prefix}-repo-manual`);
+  const existingHint = panel.querySelector(`#${prefix}-repo-existing-hint`);
+  const createInput = panel.querySelector(`#${prefix}-repo-create-name`);
+  const forkSource = panel.querySelector(`#${prefix}-repo-fork-source`);
+  const forkName = panel.querySelector(`#${prefix}-repo-fork-name`);
+  const preview = panel.querySelector(`#${prefix}-repo-preview`);
+  let repos = [];
+  let listFailed = false;
+  let listError = "";
+
+  const existingSlug = () =>
+    manualEl.value.trim() || selectEl.value.trim();
+
+  const syncPreview = () => {
+    const mode = modeSel.value;
+    if (mode === "none") {
+      preview.textContent = "No GitHub repository linked.";
+      return;
+    }
+    if (mode === "existing") {
+      const slug = existingSlug();
+      preview.textContent = slug
+        ? `Links ${GITHUB_OWNER}/${slug}`
+        : "Type a repo name or pick one from the list.";
+      return;
+    }
+    if (mode === "create") {
+      const slug = createInput.value.trim();
+      preview.textContent = slug
+        ? `Will use ${GITHUB_OWNER}/${slug} (create at gate advance if missing)`
+        : "Enter a new repository name.";
+      return;
+    }
+    const parsed = parseForkSource(forkSource.value);
+    const target = forkName.value.trim() || parsed?.repo || "";
+    preview.textContent = parsed
+      ? `Will fork ${parsed.source} → ${GITHUB_OWNER}/${target || "…"}`
+      : "Enter a source as owner/repo.";
+  };
+
+  const fillSelect = (query = "") => {
+    const q = query.trim().toLowerCase();
+    const filtered = repos.filter((repo) => !q || repo.name.toLowerCase().includes(q));
+    selectEl.innerHTML = "";
+    for (const repo of filtered) {
+      const o = document.createElement("option");
+      o.value = repo.name;
+      o.textContent = `${repo.name}${repo.private ? " (private)" : ""}`;
+      selectEl.appendChild(o);
+    }
+    const preferred = manualEl.value.trim() || initialSlug;
+    if (preferred && [...selectEl.options].some((o) => o.value === preferred)) {
+      selectEl.value = preferred;
+    }
+    browserEl.classList.toggle("hidden", listFailed && !repos.length);
+    if (listFailed) {
+      existingHint.textContent =
+        listError ||
+        "Could not load the GitHub repo list. Type the repo name above (e.g. waypoint).";
+    } else if (filtered.length) {
+      existingHint.textContent = `${filtered.length} repositor${
+        filtered.length === 1 ? "y" : "ies"
+      } loaded — filter or type a name.`;
+    } else {
+      existingHint.textContent = "No matching repositories in the loaded list — type the name above.";
+    }
+    syncPreview();
+  };
+
+  const showMode = () => {
+    const mode = modeSel.value;
+    existingPanel.classList.toggle("hidden", mode !== "existing");
+    createPanel.classList.toggle("hidden", mode !== "create");
+    forkPanel.classList.toggle("hidden", mode !== "fork");
+    syncPreview();
+  };
+
+  modeSel.onchange = showMode;
+  filterEl.oninput = () => fillSelect(filterEl.value);
+  selectEl.onchange = () => {
+    if (selectEl.value) manualEl.value = selectEl.value;
+    syncPreview();
+  };
+  manualEl.oninput = syncPreview;
+  createInput.oninput = syncPreview;
+  forkSource.oninput = syncPreview;
+  forkName.oninput = syncPreview;
+
+  if (initialSlug) {
+    modeSel.value = "existing";
+    manualEl.value = initialSlug;
+    createInput.value = initialSlug;
+  }
+
+  showMode();
+
+  const loadPromise = api("/api/github/repos")
+    .then((rows) => {
+      repos = Array.isArray(rows) ? rows : [];
+      listFailed = false;
+      listError = "";
+      fillSelect(filterEl.value);
+    })
+    .catch((err) => {
+      repos = [];
+      listFailed = true;
+      listError =
+        err?.message ||
+        "Could not load the GitHub repo list. Type the repo name above.";
+      fillSelect(filterEl.value);
+      // Stay on Use existing so the manual name field remains available.
+    });
+
+  return {
+    loadPromise,
+    async resolveRepoSlug() {
+      await loadPromise;
+      const mode = modeSel.value;
+      if (mode === "none") return "";
+      if (mode === "existing") {
+        const slug = existingSlug();
+        if (!slug) {
+          throw new Error(
+            "Enter an existing repo name (e.g. waypoint), or choose another mode."
+          );
+        }
+        if (!isValidRepoSlug(slug)) throw new Error(REPO_SLUG_ERROR);
+        return slug;
+      }
+      if (mode === "create") {
+        const slug = createInput.value.trim();
+        if (!slug) throw new Error("Enter a repository name, or choose None.");
+        if (!isValidRepoSlug(slug)) throw new Error(REPO_SLUG_ERROR);
+        return slug;
+      }
+      const parsed = parseForkSource(forkSource.value);
+      if (!parsed) throw new Error(REPO_FORK_SOURCE_ERROR);
+      const target = forkName.value.trim();
+      if (target && !isValidRepoSlug(target)) throw new Error(REPO_SLUG_ERROR);
+      const forked = await api("/api/github/forks", {
+        method: "POST",
+        body: JSON.stringify({
+          source: parsed.source,
+          name: target || null,
+        }),
+      });
+      return String(forked.repo_slug || target || parsed.repo);
+    },
+  };
+}
+
 const GROUP_BY_KEY = "foundry_group_by";
 const STATUS_FILTER_KEY = "foundry_status_filter";
 
@@ -1204,18 +1419,22 @@ async function showNewProjectForm() {
     <label for="np-visibility">Visibility</label>
     <select id="np-visibility"></select>
     <p class="field-hint">Public projects appear on the site when you publish. Private stay in Foundry only.</p>
-    <label for="np-repo">GitHub repo (optional)</label>
-    <input id="np-repo" type="text" placeholder="perrinresearch.com" autocomplete="off" />
-    <p class="field-hint">${REPO_SLUG_HINT}</p>
+    ${repoFieldMarkup("np")}
     <div class="task-editor-buttons">
       <button type="button" class="btn" id="np-save">Create</button>
       <button type="button" class="btn btn-sm secondary" id="np-cancel">Cancel</button>
     </div>
+    <p id="np-status" class="field-hint hidden" aria-live="polite"></p>
     <p id="np-error" class="error hidden"></p>
   `;
 
   const prioritySel = panel.querySelector("#np-priority");
   const refInput = panel.querySelector("#np-ref");
+  const saveBtn = panel.querySelector("#np-save");
+  const cancelBtn = panel.querySelector("#np-cancel");
+  const statusEl = panel.querySelector("#np-status");
+  const errEl = panel.querySelector("#np-error");
+  let submitting = false;
   refInput.placeholder = suggestedRef;
   refInput.value = suggestedRef;
   panel.querySelector("#np-ref-hint").textContent =
@@ -1236,15 +1455,18 @@ async function showNewProjectForm() {
     visSel.appendChild(o);
   }
 
-  panel.querySelector("#np-cancel").onclick = closeProjectCreator;
-  panel.querySelector("#np-save").onclick = async () => {
-    const errEl = panel.querySelector("#np-error");
+  const repoField = setupRepoField(panel, { prefix: "np" });
+
+  cancelBtn.onclick = () => {
+    if (!submitting) closeProjectCreator();
+  };
+  saveBtn.onclick = async () => {
+    if (submitting) return;
     errEl.classList.add("hidden");
     const ref = panel.querySelector("#np-ref").value.trim().toUpperCase();
     const name = panel.querySelector("#np-name").value.trim();
     const hypothesis = panel.querySelector("#np-hyp").value.trim();
     const customer = panel.querySelector("#np-customer").value.trim();
-    const repoSlug = panel.querySelector("#np-repo").value.trim();
     if (!ref || !name) {
       errEl.textContent = "Ref and name are required.";
       errEl.classList.remove("hidden");
@@ -1255,12 +1477,14 @@ async function showNewProjectForm() {
       errEl.classList.remove("hidden");
       return;
     }
-    if (!isValidRepoSlug(repoSlug)) {
-      errEl.textContent = REPO_SLUG_ERROR;
-      errEl.classList.remove("hidden");
-      return;
-    }
+    submitting = true;
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    saveBtn.textContent = "Creating…";
+    statusEl.textContent = "Resolving repository and creating project…";
+    statusEl.classList.remove("hidden");
     try {
+      const repoSlug = await repoField.resolveRepoSlug();
       await api("/api/projects", {
         method: "POST",
         body: JSON.stringify({
@@ -1280,6 +1504,12 @@ async function showNewProjectForm() {
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.remove("hidden");
+      submitting = false;
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+      saveBtn.textContent = "Create";
+      statusEl.textContent = "";
+      statusEl.classList.add("hidden");
     }
   };
 
@@ -1317,9 +1547,7 @@ function showProjectEditor(project) {
     <label for="pj-visibility">Visibility</label>
     <select id="pj-visibility"></select>
     <p class="field-hint">Private projects stay in Foundry and are removed from the public site on publish.</p>
-    <label for="pj-repo">GitHub repo (optional)</label>
-    <input id="pj-repo" type="text" placeholder="perrinresearch.com" autocomplete="off" />
-    <p class="field-hint">${REPO_SLUG_HINT}</p>
+    ${repoFieldMarkup("pj")}
     <label for="pj-status">Project status</label>
     <select id="pj-status"></select>
     <p class="field-hint">Internal only — archived projects stay out of site sync.</p>
@@ -1327,15 +1555,20 @@ function showProjectEditor(project) {
       <button type="button" class="btn" id="pj-save">Save</button>
       <button type="button" class="btn btn-sm secondary" id="pj-cancel">Cancel</button>
     </div>
+    <p id="pj-status-msg" class="field-hint hidden" aria-live="polite"></p>
     <p id="pj-error" class="error hidden"></p>
   `;
 
   panel.querySelector("#pj-name").value = project.name || "";
   panel.querySelector("#pj-hyp").value = project.hypothesis || "";
   panel.querySelector("#pj-customer").value = project.customer || "";
-  panel.querySelector("#pj-repo").value = project.repo_slug || "";
 
   const statusSel = panel.querySelector("#pj-status");
+  const saveBtn = panel.querySelector("#pj-save");
+  const cancelBtn = panel.querySelector("#pj-cancel");
+  const statusMsg = panel.querySelector("#pj-status-msg");
+  const errEl = panel.querySelector("#pj-error");
+  let submitting = false;
   for (const s of PROJECT_STATUSES) {
     const o = document.createElement("option");
     o.value = s.id;
@@ -1360,23 +1593,36 @@ function showProjectEditor(project) {
     visSel.appendChild(o);
   }
 
-  panel.querySelector("#pj-cancel").onclick = closeProjectEditor;
-  panel.querySelector("#pj-save").onclick = async () => {
-    const errEl = panel.querySelector("#pj-error");
+  const initialSlug = project.repo_slug || "";
+  const repoField = setupRepoField(panel, {
+    prefix: "pj",
+    initialSlug,
+  });
+  if (!initialSlug) {
+    panel.querySelector("#pj-repo-mode").value = "none";
+    panel.querySelector("#pj-repo-mode").dispatchEvent(new Event("change"));
+  }
+
+  cancelBtn.onclick = () => {
+    if (!submitting) closeProjectEditor();
+  };
+  saveBtn.onclick = async () => {
+    if (submitting) return;
     errEl.classList.add("hidden");
     const name = panel.querySelector("#pj-name").value.trim();
-    const repoSlug = panel.querySelector("#pj-repo").value.trim();
     if (!name) {
       errEl.textContent = "Name is required.";
       errEl.classList.remove("hidden");
       return;
     }
-    if (!isValidRepoSlug(repoSlug)) {
-      errEl.textContent = REPO_SLUG_ERROR;
-      errEl.classList.remove("hidden");
-      return;
-    }
+    submitting = true;
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    statusMsg.textContent = "Resolving repository…";
+    statusMsg.classList.remove("hidden");
     try {
+      const repoSlug = await repoField.resolveRepoSlug();
       await api(`/api/projects/${project.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -1394,6 +1640,12 @@ function showProjectEditor(project) {
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.remove("hidden");
+      submitting = false;
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+      saveBtn.textContent = "Save";
+      statusMsg.textContent = "";
+      statusMsg.classList.add("hidden");
     }
   };
 

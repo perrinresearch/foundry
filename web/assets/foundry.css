@@ -275,6 +275,21 @@ textarea { min-height: 5rem; resize: vertical; }
 }
 .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8125rem; }
 
+.repo-mode-panel {
+  margin: 0.35rem 0 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.repo-mode-panel.hidden {
+  display: none;
+}
+.repo-mode-panel select[size] {
+  min-height: 8rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

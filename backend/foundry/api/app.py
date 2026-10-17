@@ -97,6 +97,9 @@ from foundry.schemas import (
     EvaluationCampaignRequest,
     GateReviewCreate,
     GateReviewOut,
+    GitHubForkOut,
+    GitHubForkRequest,
+    GitHubRepoOut,
     MetricObservationCreate,
     MetricObservationOut,
     ReleaseCreate,
@@ -886,9 +889,54 @@ def provision_project_repository(
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
-    uri, created = _provision_repo_artifact(db, project)
+    uri, artifact_created = _provision_repo_artifact(db, project)
     db.commit()
-    return {"project_ref": project.ref, "repository": uri, "created": created}
+    return {
+        "project_ref": project.ref,
+        "repository": uri,
+        "created": artifact_created,
+        "artifact_created": artifact_created,
+    }
+
+
+@app.get("/api/github/repos", response_model=list[GitHubRepoOut])
+def list_github_repos(
+    user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        client = GitHubClient()
+        try:
+            return [GitHubRepoOut(**row) for row in client.list_repositories()]
+        finally:
+            client.close()
+    except GitHubClientError as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/github/forks", response_model=GitHubForkOut)
+def fork_github_repository(
+    body: GitHubForkRequest,
+    user: Annotated[User, Depends(get_current_user)],
+):
+    source_owner, source_repo = body.source.split("/", 1)
+    try:
+        client = GitHubClient()
+        try:
+            remote = client.fork_repository(
+                source_owner,
+                source_repo,
+                name=body.name,
+            )
+        finally:
+            client.close()
+    except GitHubClientError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    slug = str(remote.get("name") or body.name or source_repo)
+    return GitHubForkOut(
+        repo_slug=slug,
+        html_url=str(remote.get("html_url") or ""),
+        default_branch=str(remote.get("default_branch") or "main"),
+    )
 
 
 @app.post("/api/integrations/github/webhook")

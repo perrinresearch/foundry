@@ -120,11 +120,17 @@ For local dev against emulator: `http://10.0.2.2:8000`
 | `FOUNDRY_SITE_PUBLIC_URL` | `https://dev.perrinresearch.com` |
 | `FOUNDRY_SITE_PUBLIC_DIR` | `.../dev.perrinresearch.com/public` |
 | `FOUNDRY_EVAL_API_URL` / `FOUNDRY_EVAL_EMAIL` / `FOUNDRY_EVAL_PASSWORD` | Central Eval integration |
-| `FOUNDRY_GITHUB_TOKEN` / `FOUNDRY_GITHUB_ORG` | Repository provisioning |
+| `FOUNDRY_GITHUB_TOKEN` / `FOUNDRY_GITHUB_ORG` | Repository list, create, and fork under the configured owner |
 | `FOUNDRY_GITHUB_WEBHOOK_SECRET` | Signed GitHub event ingestion |
 | `FOUNDRY_REPOS_ROOT` | Checkouts root for agent-prompt `repo_cwd` hints (e.g. `/home/scott/perrinresearch/repos`) |
 
 On the VPS, set `FOUNDRY_REPOS_ROOT` in `backend/.env` (or the Passenger env) so claim payloads include `repo_slug` and `repo_cwd`. The directory need not exist on the VPS; WSL Cursor workers resolve and validate the path locally (and fall back to `agents/config/project_repos.json`).
+
+### GitHub repository modes
+
+New/edit project can **use an existing** repo under `FOUNDRY_GITHUB_ORG`, **create new** (ensured at idea→prototype gate advance), **fork** an external `owner/repo` into that account at save time, or link **none**.
+
+`FOUNDRY_GITHUB_TOKEN` (fine-grained or classic) needs permission to list and create/fork repositories for that owner (typically Administration write for create/fork, plus metadata/contents as required by GitHub).
 
 ## Site deploy
 

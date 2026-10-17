@@ -455,3 +455,53 @@ class AgentCompleteRequest(BaseModel):
     runtime_seconds: float | None = Field(default=None, ge=0)
     cost_usd: float | None = Field(default=None, ge=0)
     artifact_refs: list[str] = []
+
+
+class GitHubRepoOut(BaseModel):
+    name: str
+    private: bool = True
+    html_url: str = ""
+    default_branch: str = "main"
+    updated_at: str = ""
+
+
+class GitHubForkRequest(BaseModel):
+    source: str = Field(
+        min_length=3,
+        max_length=255,
+        description="Source repository as owner/repo",
+    )
+    name: str | None = Field(
+        default=None,
+        max_length=100,
+        pattern=REPO_SLUG_PATTERN,
+        description="Optional target repo name under FOUNDRY_GITHUB_ORG",
+    )
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, value: str) -> str:
+        raw = (value or "").strip().removesuffix(".git")
+        if raw.count("/") != 1:
+            raise ValueError("source must be owner/repo")
+        owner, repo = raw.split("/", 1)
+        owner = owner.strip()
+        repo = repo.strip()
+        if not owner or not repo:
+            raise ValueError("source must be owner/repo")
+        if owner.startswith("-") or repo.startswith("-"):
+            raise ValueError("GitHub names cannot start with a hyphen")
+        return f"{owner}/{repo}"
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_repo_slug(value) or None
+
+
+class GitHubForkOut(BaseModel):
+    repo_slug: str
+    html_url: str
+    default_branch: str = "main"
