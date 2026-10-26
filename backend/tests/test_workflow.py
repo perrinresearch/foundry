@@ -79,6 +79,111 @@ def create_project(client):
     return response.json()
 
 
+def test_create_minimal_project(client):
+    """Test quick-capture: create project with just ref and name."""
+    response = client.post(
+        "/api/projects",
+        json={
+            "ref": "PR-MIN",
+            "name": "Minimal quick-capture idea",
+        },
+    )
+    assert response.status_code == 201, response.text
+    project = response.json()
+    assert project["ref"] == "PR-MIN"
+    assert project["name"] == "Minimal quick-capture idea"
+    assert project["stage"] == "idea"
+    assert project["hypothesis"] == ""
+    assert project["customer"] == ""
+
+
+def test_minimal_project_cannot_advance_without_dossier(client, session):
+    """Test that minimal projects are blocked at gate review until dossier is complete."""
+    # Create minimal project
+    response = client.post(
+        "/api/projects",
+        json={
+            "ref": "PR-BLOCK",
+            "name": "Should be blocked at gate",
+        },
+    )
+    assert response.status_code == 201
+    project = response.json()
+    
+    # Check workflow shows blockers
+    workflow = client.get(f"/api/projects/{project['id']}/workflow").json()
+    assert not workflow["readiness"]["can_advance"]
+    assert len(workflow["blockers"]) > 0
+    assert any("hypothesis" in b.lower() for b in workflow["blockers"])
+    assert any("customer" in b.lower() for b in workflow["blockers"])
+    
+    # Try to advance - should fail
+    review = client.post(
+        f"/api/projects/{project['id']}/gate-reviews",
+        json={
+            "outcome": "advance",
+            "rationale": "Ready to prototype",
+        },
+    )
+    assert review.status_code == 409
+    assert "gate" in review.text.lower() and "block" in review.text.lower()
+
+
+def test_minimal_project_can_advance_with_complete_dossier(client, session):
+    """Test that completing the dossier unblocks gate review."""
+    # Create minimal project
+    response = client.post(
+        "/api/projects",
+        json={
+            "ref": "PR-FULL",
+            "name": "Will complete dossier",
+        },
+    )
+    assert response.status_code == 201
+    project = response.json()
+    
+    # Update project with required fields
+    client.patch(
+        f"/api/projects/{project['id']}",
+        json={
+            "hypothesis": "Testing quick capture flow",
+            "customer": "Internal team",
+        },
+    )
+    
+    # Add dossier
+    client.put(
+        f"/api/projects/{project['id']}/dossier",
+        json={
+            "observable_problem": "Hard to capture ideas quickly",
+            "expected_value": "Lower friction for solo devs",
+            "falsification_condition": "Usage doesn't increase",
+            "minimum_testable_artifact": "Simplified form",
+            "success_criteria": "Can create project in < 30 seconds",
+        },
+    )
+    
+    # Check workflow - should be unblocked
+    workflow = client.get(f"/api/projects/{project['id']}/workflow").json()
+    assert workflow["readiness"]["can_advance"]
+    assert len(workflow["blockers"]) == 0
+    
+    # Advance should now succeed
+    review = client.post(
+        f"/api/projects/{project['id']}/gate-reviews",
+        json={
+            "outcome": "advance",
+            "rationale": "Dossier complete, ready to prototype",
+        },
+    )
+    assert review.status_code == 200
+    
+    # Verify stage changed
+    updated = client.get(f"/api/projects/{project['id']}").json()
+    assert updated["stage"] == "prototype"
+
+
+
 def test_stage_is_gate_controlled(client):
     project = create_project(client)
     response = client.patch(
