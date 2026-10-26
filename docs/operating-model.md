@@ -22,6 +22,19 @@ Physical work stays flexible across electronics, mechanical, soft goods, and
 packaged goods. Prefer a **mockup-first** minimum testable artifact (diagrams
 and renderings) before committing to a full build.
 
+## Quick capture
+
+Ideas may be created with just a **ref** (project identifier) and **name**
+(one-line description) to minimize capture friction. The full dossier is
+required only at the point of advancing from `idea` to `prototype` via a gate
+review. This allows solo developers and small teams to track early-stage
+concepts without administrative overhead while preserving the evidence-gated
+rigor for projects that mature into prototype work.
+
+Projects created with minimal information will show gate blockers (e.g.,
+"Missing hypothesis", "Missing customer/requestor") on the workflow view until
+the dossier is completed.
+
 ## Decision outcomes
 
 - `advance`: the gate criteria are satisfied; enter the next stage.

@@ -1187,10 +1187,11 @@ async function showNewProjectForm() {
     <input id="np-ref" type="text" autocomplete="off" />
     <p class="field-hint" id="np-ref-hint">Uppercase letters, numbers, and hyphens only.</p>
     <label for="np-name">Name</label>
-    <input id="np-name" type="text" placeholder="Project name" />
-    <label for="np-hyp">Hypothesis</label>
+    <input id="np-name" type="text" placeholder="One-line description of the idea" />
+    <p class="field-hint">Quick capture: just ref + name to start. Complete the dossier when ready to advance.</p>
+    <label for="np-hyp">Hypothesis (optional)</label>
     <textarea id="np-hyp" placeholder="What are you testing?"></textarea>
-    <label for="np-customer">Customer / requestor</label>
+    <label for="np-customer">Customer / requestor (optional)</label>
     <input id="np-customer" type="text" placeholder="Who asked for this / who it is for" autocomplete="organization" />
     <label for="np-form">Form</label>
     <select id="np-form">
@@ -1198,7 +1199,6 @@ async function showNewProjectForm() {
       <option value="static">Static (writing)</option>
       <option value="physical">Physical (product)</option>
     </select>
-    <p class="field-hint">New projects enter the Idea stage and advance through evidence gates.</p>
     <label for="np-priority">Priority</label>
     <select id="np-priority"></select>
     <label for="np-visibility">Visibility</label>

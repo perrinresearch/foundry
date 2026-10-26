@@ -30,9 +30,15 @@ Open http://localhost:8000
 
 ## Evidence-gated workflow
 
-Projects enter at `idea`; direct stage edits are rejected. Complete the project
-dossier, experiments, immutable artifacts, Eval campaigns, and human gate
-reviews to advance through `prototype`, `evaluation`, and `shipped`.
+Projects enter at `idea`; direct stage edits are rejected. 
+
+**Quick capture:** Create a project with just a ref and name to track early ideas.
+Complete the project dossier (hypothesis, customer, problem, value, success
+criteria, etc.) when you're ready to advance through gate reviews.
+
+The full dossier is required only when advancing from `idea` to `prototype`.
+This allows lightweight tracking of early concepts while preserving evidence
+rigor for projects that mature.
 
 - Operating contract: [docs/operating-model.md](docs/operating-model.md)
 - Three-form pilot (interactive, static, physical): [docs/pilot-runbook.md](docs/pilot-runbook.md)
@@ -56,7 +62,7 @@ venv/bin/pip install -r backend/requirements.txt
 ./scripts/run.sh
 ```
 
-**Demo login:** `scott@perrinresearch.com` / `foundry-demo` (bootstrapped as admin)
+**Demo login:** `scott@perrinresearch.com` / `[set password on first run]` (bootstrapped as admin)
 
 ## API
 
