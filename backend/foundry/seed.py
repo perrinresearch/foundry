@@ -1,8 +1,12 @@
 """Seed demo user and portfolio projects."""
 
+import secrets
+import string
+
 from sqlalchemy.orm import Session
 
 from foundry.auth import hash_password
+from foundry.config import settings
 from foundry.models import AgentPrompt, Project, Task, User
 
 PR000 = {
@@ -181,6 +185,12 @@ def ensure_seed_projects(db: Session) -> None:
     db.commit()
 
 
+def _generate_random_password(length: int = 20) -> str:
+    """Generate a random password with letters, digits, and punctuation."""
+    alphabet = string.ascii_letters + string.digits + string.punctuation
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
 def ensure_bootstrap_admin(db: Session) -> None:
     """Ensure at least one admin exists (prefer scott@perrinresearch.com)."""
     if db.query(User).filter(User.is_admin == True).first():  # noqa: E712
@@ -202,10 +212,21 @@ def seed_database(db: Session) -> None:
         ensure_bootstrap_admin(db)
         return
 
+    if settings.admin_password:
+        admin_password = settings.admin_password
+        print("⚠️  Using admin password from FOUNDRY_ADMIN_PASSWORD environment variable")
+    else:
+        admin_password = _generate_random_password()
+        print("=" * 80)
+        print("🔐 GENERATED ADMIN PASSWORD (save this now, it won't be shown again):")
+        print(f"   Email: scott@perrinresearch.com")
+        print(f"   Password: {admin_password}")
+        print("=" * 80)
+
     user = User(
         email="scott@perrinresearch.com",
         name="Scott Perrin",
-        password_hash=hash_password("foundry-demo"),
+        password_hash=hash_password(admin_password),
         is_admin=True,
         is_active=True,
     )
