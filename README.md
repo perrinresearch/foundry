@@ -62,7 +62,16 @@ venv/bin/pip install -r backend/requirements.txt
 ./scripts/run.sh
 ```
 
-**Demo login:** `scott@perrinresearch.com` / `[set password on first run]` (bootstrapped as admin)
+**Admin login:** On first run, the admin account (`scott@perrinresearch.com`) is created with:
+- A password from the `FOUNDRY_ADMIN_PASSWORD` environment variable, if set
+- Otherwise, a randomly generated password printed to the console (save it immediately)
+
+To set a custom password, add to `backend/.env`:
+```
+FOUNDRY_ADMIN_PASSWORD=your-secure-password-here
+```
+
+Admins can change their password from the **Change password** link in the UI header.
 
 ## API
 
@@ -114,6 +123,7 @@ For local dev against emulator: `http://10.0.2.2:8000`
 | Variable | Default |
 |----------|---------|
 | `FOUNDRY_SECRET_KEY` | change-me-in-production |
+| `FOUNDRY_ADMIN_PASSWORD` | (random, printed to logs on first run) |
 | `FOUNDRY_PORT` | 8411 |
 | `FOUNDRY_CORS_ORIGINS` | localhost origins |
 | `FOUNDRY_SITE_DEPLOY_SCRIPT` | `.../dev.perrinresearch.com/site/scripts/deploy.sh` |

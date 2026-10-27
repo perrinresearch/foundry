@@ -124,7 +124,7 @@ fun FoundryApp() {
 @Composable
 fun LoginScreen(onLogin: (String, String) -> Unit, error: String?) {
     var email by remember { mutableStateOf("scott@perrinresearch.com") }
-    var password by remember { mutableStateOf("foundry-demo") }
+    var password by remember { mutableStateOf("") }
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,

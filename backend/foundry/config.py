@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     github_webhook_secret: str = ""
     # Local checkouts root for Cursor/agent workers (WSL). Empty = unset.
     repos_root: str = ""
+    # Admin bootstrap password. If empty, a random password is generated on first run.
+    admin_password: str = ""
 
     @property
     def data_dir(self) -> Path:
