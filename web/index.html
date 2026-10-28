@@ -20,7 +20,14 @@
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="username" required />
         <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password" required />
+        <div class="password-field">
+          <input id="password" type="password" autocomplete="current-password" required />
+          <button type="button" class="password-toggle" aria-label="Show password">
+            <svg class="eye-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 4C5 4 1.73 7.11 1 10c.73 2.89 4 6 9 6s8.27-3.11 9-6c-.73-2.89-4-6-9-6zm0 10a4 4 0 110-8 4 4 0 010 8zm0-6.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
         <button type="submit" class="btn">Sign in</button>
         <p id="login-error" class="error hidden"></p>
       </form>

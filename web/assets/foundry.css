@@ -227,6 +227,38 @@ input, textarea, select {
   font-family: inherit;
   font-size: 0.9375rem;
 }
+.password-field {
+  position: relative;
+  margin-bottom: 1rem;
+}
+.password-field input {
+  margin-bottom: 0;
+  padding-right: 2.75rem;
+}
+.password-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  padding: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.password-toggle:hover {
+  color: var(--color-text-muted);
+  background: var(--color-border-subtle);
+}
+.password-toggle:focus {
+  outline: 2px solid var(--color-ember);
+  outline-offset: 2px;
+}
 textarea { min-height: 5rem; resize: vertical; }
 .group-by-control {
   display: inline-flex;
