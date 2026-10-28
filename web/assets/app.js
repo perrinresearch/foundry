@@ -2153,6 +2153,17 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Password visibility toggle
+const passwordToggle = document.querySelector(".password-toggle");
+const passwordInput = document.getElementById("password");
+if (passwordToggle && passwordInput) {
+  passwordToggle.addEventListener("click", () => {
+    const isPassword = passwordInput.type === "password";
+    passwordInput.type = isPassword ? "text" : "password";
+    passwordToggle.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
+  });
+}
+
 document.getElementById("login-form").onsubmit = async (e) => {
   e.preventDefault();
   const errEl = document.getElementById("login-error");
